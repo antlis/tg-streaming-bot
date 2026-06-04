@@ -18,6 +18,9 @@ if os.getenv("PROXY_HOST"):
         PROXY["username"] = os.getenv("PROXY_USER")
         PROXY["password"] = os.getenv("PROXY_PASS")
 
+# The bot session is persisted (downloads/ is a volume) so container restarts
+# reuse it instead of re-running auth.ImportBotAuthorization every boot —
+# repeated re-auths trip Telegram's FloodWait on the token.
 bot = Client(
     "bot",
     API_ID,
@@ -25,13 +28,14 @@ bot = Client(
     bot_token=BOT_TOKEN,
     plugins={"root": "program"},
     proxy=PROXY,
-    in_memory=True,
+    workdir="downloads",
 )
 
 user = Client(
-    SESSION_NAME,
+    "assistant",
     api_id=API_ID,
     api_hash=API_HASH,
+    session_string=SESSION_NAME,
     proxy=PROXY,
 )
 

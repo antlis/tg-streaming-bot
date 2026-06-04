@@ -8,6 +8,7 @@ logging.getLogger("pytgcalls").setLevel(logging.WARNING)
 
 from pytgcalls import idle
 from pyrogram.types import BotCommand
+from pyrogram.errors import FloodWait
 from driver.clients import call_py, bot
 
 BOT_COMMANDS = [
@@ -44,7 +45,17 @@ async def heartbeat():
 
 async def start_bot():
     print("[INFO]: STARTING BOT CLIENT")
-    await bot.start()
+    # If Telegram rate-limited the token login (e.g. after several restarts in
+    # a row), wait the window out gracefully instead of crash-looping — which
+    # would re-attempt the login and keep the flood going.
+    while True:
+        try:
+            await bot.start()
+            break
+        except FloodWait as e:
+            wait = int(e.value) + 5
+            print(f"[WARN]: FloodWait on bot login — sleeping {wait}s")
+            await asyncio.sleep(wait)
     try:
         await bot.set_bot_commands(BOT_COMMANDS)
         print("[INFO]: BOT COMMANDS REGISTERED")

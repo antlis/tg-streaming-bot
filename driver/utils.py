@@ -120,6 +120,9 @@ def prune_downloads():
     used = _queued_paths()
     files = []
     for name in os.listdir(folder):
+        # never prune Pyrogram session files living in the volume
+        if name.endswith((".session", ".session-journal")):
+            continue
         path = os.path.join(folder, name)
         if os.path.isfile(path) and path not in used:
             try:
