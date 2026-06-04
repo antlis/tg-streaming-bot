@@ -1,16 +1,12 @@
 {
-    "name": "WarMusic Stream Bot",
-    "description": "Telegram bot for Streaming Video & Music trought the Telegram Group Video Chat, powered by pytgcalls and pyrogram",
-    "logo": "https://telegra.ph/file/554b047bd413dcd518cdf.png",
+    "name": "Music & Video Stream Bot",
+    "description": "Telegram bot for streaming video & music through Telegram group video chats, powered by pytgcalls and pyrogram",
     "keywords": [
         "pytgcalls",
         "telegram bot",
         "video stream",
         "pyrogram"
     ],
-    "website": "https://t.me/TheWarBotZ",
-    "repository": "https://github.com/xAbhish3k/warmusicbot",
-    "success_url": "https://t.me/xAbhish3k",
     "env": {
         "API_ID": {
             "description": "your API_ID from my.telegram.org",
@@ -45,24 +41,20 @@
             "required": true
         },
         "GROUP_SUPPORT": {
-            "description": "if you have group, then fill the group username here without @",
-            "required": true,
-            "value": "WarbotzSupport"
+            "description": "group username (without @) or a t.me invite hash like +xxxxxxxx",
+            "required": false
         },
         "UPDATES_CHANNEL": {
-            "description": "if you have channel, then fill the channel username here without @",
-            "required": true,
-            "value": "TheWarBotZ"
+            "description": "channel username (without @) or a t.me invite hash like +xxxxxxxx",
+            "required": false
         },
         "OWNER_NAME": {
-            "description": "fill with your telegram account username without @",
-            "required": true,
-            "value": "xAbhish3k"
+            "description": "your telegram account username without @",
+            "required": false
         },
         "ALIVE_NAME": {
-            "description": "fill with your telegram account nickname/name",
-            "required": true,
-            "value": "TheWarBotZ"
+            "description": "your telegram account nickname/name",
+            "required": false
         }
     },
     "addons": [],

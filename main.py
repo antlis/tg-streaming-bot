@@ -1,6 +1,13 @@
 import asyncio
+import logging
+
+# Keep WARNING/ERROR (so real problems still show) but silence the pytgcalls
+# DEBUG stream spam that otherwise floods the logs.
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger("pytgcalls").setLevel(logging.WARNING)
+
 from pytgcalls import idle
-from driver.veez import call_py, bot
+from driver.clients import call_py, bot
 
 async def start_bot():
     print("[INFO]: STARTING BOT CLIENT")

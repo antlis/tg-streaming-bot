@@ -6,24 +6,29 @@ if os.path.exists("local.env"):
     load_dotenv("local.env")
 
 load_dotenv()
+
+# Fallback card image (local file shipped with the repo). Override with your own
+# ALIVE_IMG / IMG_1..IMG_4 URLs or file paths in .env.
+_DEFAULT_IMG = "driver/source/LightBlue.png"
+
 admins = {}
 SESSION_NAME = getenv("SESSION_NAME", "session")
 BOT_TOKEN = getenv("BOT_TOKEN")
-BOT_NAME = getenv("BOT_NAME", "Video Stream")
+BOT_NAME = getenv("BOT_NAME", "Music Bot")
 API_ID = int(getenv("API_ID"))
 API_HASH = getenv("API_HASH")
-OWNER_NAME = getenv("OWNER_NAME", "xAbhish3k")
-ALIVE_NAME = getenv("ALIVE_NAME", "xAbhish3k")
-BOT_USERNAME = getenv("BOT_USERNAME", "camillamusicbot")
-ASSISTANT_NAME = getenv("ASSISTANT_NAME", "warbotzsupport")
-GROUP_SUPPORT = getenv("GROUP_SUPPORT", "warbotz")
-UPDATES_CHANNEL = getenv("UPDATES_CHANNEL", "TheWarBotZ")
+OWNER_NAME = getenv("OWNER_NAME", "")
+ALIVE_NAME = getenv("ALIVE_NAME", "")
+BOT_USERNAME = getenv("BOT_USERNAME", "")
+ASSISTANT_NAME = getenv("ASSISTANT_NAME", "assistant")
+GROUP_SUPPORT = getenv("GROUP_SUPPORT", "")
+UPDATES_CHANNEL = getenv("UPDATES_CHANNEL", "")
 SUDO_USERS = list(map(int, getenv("SUDO_USERS").split()))
 COMMAND_PREFIXES = list(getenv("COMMAND_PREFIXES", "/ ! .").split())
-ALIVE_IMG = getenv("ALIVE_IMG", "https://telegra.ph/file/8bad7843782ee1a1cc4f0.jpg")
+ALIVE_IMG = getenv("ALIVE_IMG", _DEFAULT_IMG)
 DURATION_LIMIT = int(getenv("DURATION_LIMIT", "540000"))
-UPSTREAM_REPO = getenv("UPSTREAM_REPO", "https://github.com/xAbhish3k/video-stream")
-IMG_1 = getenv("IMG_1", "https://telegra.ph/file/cd573e828a010ef46534c.png")
-IMG_2 = getenv("IMG_2", "https://telegra.ph/file/a91c17a11f1e3a9cf4a3e.png")
-IMG_3 = getenv("IMG_3", "https://telegra.ph/file/e2250edc9ec36f489db02.png")
-IMG_4 = getenv("IMG_4", "https://telegra.ph/file/554b047bd413dcd518cdf.png")
+UPSTREAM_REPO = getenv("UPSTREAM_REPO", "")
+IMG_1 = getenv("IMG_1", _DEFAULT_IMG)
+IMG_2 = getenv("IMG_2", _DEFAULT_IMG)
+IMG_3 = getenv("IMG_3", _DEFAULT_IMG)
+IMG_4 = getenv("IMG_4", _DEFAULT_IMG)

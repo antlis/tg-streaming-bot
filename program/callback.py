@@ -10,11 +10,40 @@ from config import (
     GROUP_SUPPORT,
     OWNER_NAME,
     UPDATES_CHANNEL,
+    UPSTREAM_REPO,
 )
 
 
 @Client.on_callback_query(filters.regex("cbstart"))
 async def cbstart(_, query: CallbackQuery):
+    rows = [
+        [
+            InlineKeyboardButton(
+                "➕ Add me to your Group ➕",
+                url=f"https://t.me/{BOT_USERNAME}?startgroup=true",
+            )
+        ],
+        [InlineKeyboardButton("❓ Basic Guide", callback_data="cbhowtouse")],
+        [InlineKeyboardButton("📚 Commands", callback_data="cbcmds")]
+        + (
+            [InlineKeyboardButton("❤️ info", url=f"https://t.me/{OWNER_NAME}")]
+            if OWNER_NAME
+            else []
+        ),
+    ]
+    socials = []
+    if GROUP_SUPPORT:
+        socials.append(
+            InlineKeyboardButton("👥 Official Group", url=f"https://t.me/{GROUP_SUPPORT}")
+        )
+    if UPDATES_CHANNEL:
+        socials.append(
+            InlineKeyboardButton("📣 Official Channel", url=f"https://t.me/{UPDATES_CHANNEL}")
+        )
+    if socials:
+        rows.append(socials)
+    if UPSTREAM_REPO:
+        rows.append([InlineKeyboardButton("🌐 Source Code", url=UPSTREAM_REPO)])
     await query.edit_message_text(
         f"""✨ **Welcome [{query.message.chat.first_name}](tg://user?id={query.message.chat.id}) !**\n
 💭 **[{BOT_NAME}](https://t.me/{BOT_USERNAME}) allows you to play music and video on groups through the new Telegram's video chats!**
@@ -22,34 +51,7 @@ async def cbstart(_, query: CallbackQuery):
 💡 **Find out all the Bot's commands and how they work by clicking on the » 📚 Commands button!**
 
 🔖 **To know how to use this bot, please click on the » ❓ Basic Guide button!**""",
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "➕ Add me to your Group ➕",
-                        url=f"https://t.me/{BOT_USERNAME}?startgroup=true",
-                    )
-                ],
-                [InlineKeyboardButton("❓ Basic Guide", callback_data="cbhowtouse")],
-                [
-                    InlineKeyboardButton("📚 Commands", callback_data="cbcmds"),
-                    InlineKeyboardButton("❤ Donate", url=f"https://t.me/{OWNER_NAME}"),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "👥 Official Group", url=f"https://t.me/{GROUP_SUPPORT}"
-                    ),
-                    InlineKeyboardButton(
-                        "📣 Official Channel", url=f"https://t.me/{UPDATES_CHANNEL}"
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "🌐 Source Code", url="https://github.com/levina-lab/video-stream"
-                    )
-                ],
-            ]
-        ),
+        reply_markup=InlineKeyboardMarkup(rows),
         disable_web_page_preview=True,
     )
 

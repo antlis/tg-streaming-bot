@@ -2,16 +2,17 @@
 
 import re
 import asyncio
+import subprocess
 
 from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2
 from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue
-from driver.veez import call_py, user
-from driver.utils import bash
+from driver.clients import call_py, user
+from driver.utils import bash, make_progress, control_panel
 from pyrogram import Client
-from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant
+from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from pytgcalls import StreamType
 from pytgcalls.types.input_stream import AudioPiped
@@ -20,6 +21,18 @@ from youtubesearchpython import VideosSearch
 
 def ytsearch(query: str):
     try:
+        if re.match(r"https?://(www\.|m\.)?(youtube\.com|youtu\.be)/", query.strip()):
+            # direct URL — the search lib can't parse URLs, so use yt-dlp for metadata
+            out = subprocess.run(
+                ["yt-dlp", "--no-warnings", "--skip-download",
+                 "--print", "%(title)s\x1f%(duration_string)s\x1f%(id)s", query],
+                capture_output=True, text=True, timeout=90,
+            ).stdout.strip().split("\x1f")
+            title = out[0] if out and out[0] else "YouTube"
+            duration = out[1] if len(out) > 1 else ""
+            vid = out[2] if len(out) > 2 and out[2] else ""
+            thumbnail = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg" if vid else ""
+            return [title, query.strip(), duration, thumbnail]
         search = VideosSearch(query, limit=1).result()
         data = search["result"][0]
         songname = data["title"]
@@ -33,10 +46,30 @@ def ytsearch(query: str):
 
 
 async def ytdl(format: str, link: str):
-    stdout, stderr = await bash(f'yt-dlp -g -f "{format}" {link}')
-    if stdout:
-        return 1, stdout.split("\n")[0]
-    return 0, stderr
+    # Download the audio to a local file and return its path. YouTube 403s the
+    # direct stream URL for ffmpeg, so download via yt-dlp and stream the file.
+    proc = await asyncio.create_subprocess_exec(
+        "yt-dlp",
+        "--no-warnings",
+        "--no-playlist",
+        "--no-simulate",
+        # android_vr client avoids YouTube's SABR-gating that 403s the default streams.
+        "--extractor-args",
+        "youtube:player_client=android_vr",
+        "--print",
+        "after_move:filepath",
+        "-f",
+        "bestaudio[ext=m4a]/bestaudio/best",
+        "-o",
+        "downloads/%(id)s.%(ext)s",
+        f"{link}",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode == 0 and stdout.strip():
+        return 1, stdout.decode().strip().split("\n")[-1]
+    return 0, stderr.decode()
 
 
 @Client.on_message(command(["play", f"play@{BOT_USERNAME}"]) & other_filters)
@@ -44,14 +77,7 @@ async def play(c: Client, m: Message):
     await m.delete()
     replied = m.reply_to_message
     chat_id = m.chat.id
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(text="• Mᴇɴᴜ", callback_data="cbmenu"),
-                InlineKeyboardButton(text="• Cʟᴏsᴇ", callback_data="cls"),
-            ]
-        ]
-    )
+    keyboard = control_panel
     if m.sender_chat:
         return await m.reply_text("you're an __Anonymous__ Admin !\n\n» revert back to user account from admin rights.")
     try:
@@ -85,10 +111,12 @@ async def play(c: Client, m: Message):
                 f"@{ASSISTANT_NAME} **is banned in group** {m.chat.title}\n\n» **unban the userbot first if you want to use this bot.**"
             )
             return
-    except UserNotParticipant:
+    except (UserNotParticipant, PeerIdInvalid):
         if m.chat.username:
             try:
                 await user.join_chat(m.chat.username)
+            except UserAlreadyParticipant:
+                pass
             except Exception as e:
                 await m.reply_text(f"❌ **userbot failed to join**\n\n**reason**: `{e}`")
                 return
@@ -111,7 +139,7 @@ async def play(c: Client, m: Message):
     if replied:
         if replied.audio or replied.voice:
             suhu = await replied.reply("📥 **downloading audio...**")
-            dl = await replied.download()
+            dl = await replied.download(progress=make_progress(suhu, "📥 Downloading audio"))
             link = replied.link
             if replied.audio:
                 if replied.audio.title:
@@ -174,8 +202,8 @@ async def play(c: Client, m: Message):
                     ctitle = await CHAT_TITLE(gcname)
                     image = await thumb(thumbnail, title, userid, ctitle)
                     format = "bestaudio[ext=m4a]"
-                    veez, ytlink = await ytdl(format, url)
-                    if veez == 0:
+                    ok, ytlink = await ytdl(format, url)
+                    if ok == 0:
                         await suhu.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")
                     else:
                         if chat_id in QUEUE:
@@ -233,8 +261,8 @@ async def play(c: Client, m: Message):
                 ctitle = await CHAT_TITLE(gcname)
                 image = await thumb(thumbnail, title, userid, ctitle)
                 format = "bestaudio[ext=m4a]"
-                veez, ytlink = await ytdl(format, url)
-                if veez == 0:
+                ok, ytlink = await ytdl(format, url)
+                if ok == 0:
                     await suhu.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")
                 else:
                     if chat_id in QUEUE:

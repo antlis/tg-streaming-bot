@@ -8,7 +8,6 @@ raw_files
 downloads
 venv
 local.env
-gen_session.py
 *.session
 *.jpg
 *png

@@ -1,18 +1,16 @@
-# Copyright (C) 2021 By Veez Music-Project
-# Commit Start Date 20/10/2021
-# Finished On 28/10/2021
-
 import re
 import asyncio
+import subprocess
 
 from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2
 from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue
-from driver.veez import call_py, user
+from driver.clients import call_py, user
+from driver.utils import make_progress, control_panel
 from pyrogram import Client
-from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant
+from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from pytgcalls import StreamType
 from pytgcalls.types.input_stream import AudioVideoPiped
@@ -27,6 +25,18 @@ from youtubesearchpython import VideosSearch
 
 def ytsearch(query: str):
     try:
+        if re.match(r"https?://(www\.|m\.)?(youtube\.com|youtu\.be)/", query.strip()):
+            # direct URL — the search lib can't parse URLs, so use yt-dlp for metadata
+            out = subprocess.run(
+                ["yt-dlp", "--no-warnings", "--skip-download",
+                 "--print", "%(title)s\x1f%(duration_string)s\x1f%(id)s", query],
+                capture_output=True, text=True, timeout=90,
+            ).stdout.strip().split("\x1f")
+            title = out[0] if out and out[0] else "YouTube"
+            duration = out[1] if len(out) > 1 else ""
+            vid = out[2] if len(out) > 2 and out[2] else ""
+            thumbnail = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg" if vid else ""
+            return [title, query.strip(), duration, thumbnail]
         search = VideosSearch(query, limit=1).result()
         data = search["result"][0]
         songname = data["title"]
@@ -40,18 +50,36 @@ def ytsearch(query: str):
 
 
 async def ytdl(link):
+    # Download (DASH video+audio, merged) to a local file and return its path.
+    # YouTube 403s the progressive (itag 18) stream URL for direct ffmpeg
+    # streaming, so we download via yt-dlp (which picks working DASH formats)
+    # and stream the local file instead.
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
-        "-g",
+        "--no-warnings",
+        "--no-playlist",
+        "--no-simulate",
+        # android_vr client avoids YouTube's SABR-gating (the default clients
+        # only offer the progressive itag-18 stream, which 403s).
+        "--extractor-args",
+        "youtube:player_client=android_vr",
+        "--print",
+        "after_move:filepath",
+        # Prefer H.264 video + AAC(m4a) audio so the merge produces a universally
+        # playable, light-to-stream mp4 (avoids AV1/VP9/Opus -> mp4 issues).
         "-f",
-        "best[height<=?720][width<=?1280]",
+        "bestvideo[height<=?720][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<=?720][ext=mp4]+bestaudio[ext=m4a]/best[height<=?720]/best",
+        "--merge-output-format",
+        "mp4",
+        "-o",
+        "downloads/%(id)s.%(ext)s",
         f"{link}",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
     stdout, stderr = await proc.communicate()
-    if stdout:
-        return 1, stdout.decode().split("\n")[0]
+    if proc.returncode == 0 and stdout.strip():
+        return 1, stdout.decode().strip().split("\n")[-1]
     else:
         return 0, stderr.decode()
 
@@ -61,14 +89,7 @@ async def vplay(c: Client, m: Message):
     await m.delete()
     replied = m.reply_to_message
     chat_id = m.chat.id
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(text="• Mᴇɴᴜ", callback_data="cbmenu"),
-                InlineKeyboardButton(text="• Cʟᴏsᴇ", callback_data="cls"),
-            ]
-        ]
-    )
+    keyboard = control_panel
     if m.sender_chat:
         return await m.reply_text("you're an __Anonymous__ Admin !\n\n» revert back to user account from admin rights.")
     try:
@@ -102,10 +123,12 @@ async def vplay(c: Client, m: Message):
                 f"@{ASSISTANT_NAME} **is banned in group** {m.chat.title}\n\n» **unban the userbot first if you want to use this bot.**"
             )
             return
-    except UserNotParticipant:
+    except (UserNotParticipant, PeerIdInvalid):
         if m.chat.username:
             try:
                 await user.join_chat(m.chat.username)
+            except UserAlreadyParticipant:
+                pass
             except Exception as e:
                 await m.reply_text(f"❌ **userbot failed to join**\n\n**reason**: `{e}`")
                 return
@@ -129,7 +152,7 @@ async def vplay(c: Client, m: Message):
     if replied:
         if replied.video or replied.document:
             loser = await replied.reply("📥 **downloading video...**")
-            dl = await replied.download()
+            dl = await replied.download(progress=make_progress(loser, "📥 Downloading video"))
             link = replied.link
             if len(m.command) < 2:
                 Q = 720
@@ -207,8 +230,8 @@ async def vplay(c: Client, m: Message):
                     gcname = m.chat.title
                     ctitle = await CHAT_TITLE(gcname)
                     image = await thumb(thumbnail, title, userid, ctitle)
-                    veez, ytlink = await ytdl(url)
-                    if veez == 0:
+                    ok, ytlink = await ytdl(url)
+                    if ok == 0:
                         await loser.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")
                     else:
                         if chat_id in QUEUE:
@@ -269,8 +292,8 @@ async def vplay(c: Client, m: Message):
                 gcname = m.chat.title
                 ctitle = await CHAT_TITLE(gcname)
                 image = await thumb(thumbnail, title, userid, ctitle)
-                veez, ytlink = await ytdl(url)
-                if veez == 0:
+                ok, ytlink = await ytdl(url)
+                if ok == 0:
                     await loser.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")
                 else:
                     if chat_id in QUEUE:
@@ -313,14 +336,7 @@ async def vplay(c: Client, m: Message):
 async def vstream(c: Client, m: Message):
     await m.delete()
     chat_id = m.chat.id
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(text="• Mᴇɴᴜ", callback_data="cbmenu"),
-                InlineKeyboardButton(text="• Cʟᴏsᴇ", callback_data="cls"),
-            ]
-        ]
-    )
+    keyboard = control_panel
     if m.sender_chat:
         return await m.reply_text("you're an __Anonymous__ Admin !\n\n» revert back to user account from admin rights.")
     try:
@@ -354,10 +370,12 @@ async def vstream(c: Client, m: Message):
                 f"@{ASSISTANT_NAME} **is banned in group** {m.chat.title}\n\n» **unban the userbot first if you want to use this bot.**"
             )
             return
-    except UserNotParticipant:
+    except (UserNotParticipant, PeerIdInvalid):
         if m.chat.username:
             try:
                 await user.join_chat(m.chat.username)
+            except UserAlreadyParticipant:
+                pass
             except Exception as e:
                 await m.reply_text(f"❌ **userbot failed to join**\n\n**reason**: `{e}`")
                 return
@@ -403,12 +421,12 @@ async def vstream(c: Client, m: Message):
         regex = r"^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+"
         match = re.match(regex, link)
         if match:
-            veez, livelink = await ytdl(link)
+            ok, livelink = await ytdl(link)
         else:
             livelink = link
-            veez = 1
+            ok = 1
 
-        if veez == 0:
+        if ok == 0:
             await loser.edit(f"❌ yt-dl issues detected\n\n» `{livelink}`")
         else:
             if chat_id in QUEUE:

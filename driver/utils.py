@@ -1,6 +1,7 @@
 import os
 import asyncio
-from driver.veez import bot, call_py
+from time import time
+from driver.clients import bot, call_py
 from pytgcalls.types import Update
 from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
 from driver.queues import QUEUE, clear_queue, get_queue, pop_an_item
@@ -28,6 +29,51 @@ keyboard = InlineKeyboardMarkup(
             ]
         ]
     )
+
+
+# Now-playing transport panel (tg-mpv-bot style) — reuses the existing callbacks.
+control_panel = InlineKeyboardMarkup(
+    [
+        [
+            InlineKeyboardButton("⏸", callback_data="cbpause"),
+            InlineKeyboardButton("▶️", callback_data="cbresume"),
+            InlineKeyboardButton("⏭", callback_data="cbskip"),
+        ],
+        [
+            InlineKeyboardButton("🔇", callback_data="cbmute"),
+            InlineKeyboardButton("🔊", callback_data="cbunmute"),
+            InlineKeyboardButton("⏹", callback_data="cbstop"),
+        ],
+        [
+            InlineKeyboardButton("🗑 Close", callback_data="cls"),
+        ],
+    ]
+)
+
+
+def make_progress(message, label="📥 Downloading"):
+    """Return an async Pyrogram download-progress callback that edits `message`
+    with a percentage bar, throttled to at most once / 3s to avoid FloodWait."""
+    state = {"t": 0.0, "pct": -1}
+
+    async def progress(current, total):
+        pct = int(current * 100 / total) if total else 0
+        now = time()
+        if pct != 100 and (now - state["t"] < 3 or pct == state["pct"]):
+            return
+        state["t"] = now
+        state["pct"] = pct
+        filled = pct // 10
+        bar = "█" * filled + "░" * (10 - filled)
+        try:
+            await message.edit(
+                f"**{label}…**\n`{bar}` **{pct}%**  "
+                f"({current // 1048576}/{total // 1048576} MB)"
+            )
+        except Exception:
+            pass
+
+    return progress
 
 
 async def skip_current_song(chat_id):

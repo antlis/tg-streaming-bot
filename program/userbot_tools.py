@@ -1,10 +1,10 @@
 import asyncio
-from driver.veez import user
+from driver.clients import user
 from pyrogram.types import Message
 from pyrogram import Client, filters
 from config import BOT_USERNAME, SUDO_USERS
 from driver.filters import command, other_filters
-from pyrogram.errors import UserAlreadyParticipant
+from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
 from driver.decorators import authorized_users_only, sudo_users_only
 
 
@@ -14,25 +14,26 @@ from driver.decorators import authorized_users_only, sudo_users_only
 @authorized_users_only
 async def join_chat(c: Client, m: Message):
     chat_id = m.chat.id
+    ubot_id = (await user.get_me()).id
+    # make the assistant join (ignore if it's already a member)
     try:
         invite_link = await m.chat.export_invite_link()
         if "+" in invite_link:
             link_hash = (invite_link.replace("+", "")).split("t.me/")[1]
             await user.join_chat(f"https://t.me/joinchat/{link_hash}")
-        await m.chat.promote_member(
-            (await user.get_me()).id,
-            can_manage_voice_chats=True
-        )
-        return await user.send_message(chat_id, "✅ userbot entered chat")
+        else:
+            await user.join_chat(invite_link)
     except UserAlreadyParticipant:
-        admin = await m.chat.get_member((await user.get_me()).id)
-        if not admin.can_manage_voice_chats:
-            await m.chat.promote_member(
-                (await user.get_me()).id,
-                can_manage_voice_chats=True
-            )
-            return await user.send_message(chat_id, "✅ userbot already in chat")
-        return await user.send_message(chat_id, "✅ userbot already in chat")
+        pass
+    except Exception as e:
+        return await m.reply(f"❌ **userbot failed to join**\n\n**reason**: `{e}`")
+    # optional: promote it (needed only for /volume). The bot may not be able to
+    # resolve the assistant peer yet (PeerIdInvalid) — that's fine, skip quietly.
+    try:
+        await m.chat.promote_member(ubot_id, can_manage_voice_chats=True)
+    except (PeerIdInvalid, Exception):
+        pass
+    return await user.send_message(chat_id, "✅ userbot is in the chat")
 
 
 @Client.on_message(command(["userbotleave",

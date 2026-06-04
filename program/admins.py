@@ -1,5 +1,5 @@
 from cache.admins import admins
-from driver.veez import call_py
+from driver.clients import call_py
 from pyrogram import Client, filters
 from driver.decorators import authorized_users_only
 from driver.filters import command, other_filters
@@ -189,11 +189,9 @@ async def cbpause(_, query: CallbackQuery):
     if chat_id in QUEUE:
         try:
             await call_py.pause_stream(chat_id)
-            await query.edit_message_text(
-                "⏸ the streaming has paused", reply_markup=bttn
-            )
+            await query.answer("⏸ paused")
         except Exception as e:
-            await query.edit_message_text(f"🚫 **error:**\n\n`{e}`", reply_markup=bcl)
+            await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
     else:
         await query.answer("❌ nothing is currently streaming", show_alert=True)
 
@@ -209,11 +207,9 @@ async def cbresume(_, query: CallbackQuery):
     if chat_id in QUEUE:
         try:
             await call_py.resume_stream(chat_id)
-            await query.edit_message_text(
-                "▶️ the streaming has resumed", reply_markup=bttn
-            )
+            await query.answer("▶️ resumed")
         except Exception as e:
-            await query.edit_message_text(f"🚫 **error:**\n\n`{e}`", reply_markup=bcl)
+            await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
     else:
         await query.answer("❌ nothing is currently streaming", show_alert=True)
 
@@ -230,9 +226,32 @@ async def cbstop(_, query: CallbackQuery):
         try:
             await call_py.leave_group_call(chat_id)
             clear_queue(chat_id)
-            await query.edit_message_text("✅ **this streaming has ended**", reply_markup=bcl)
+            await query.answer("⏹ stopped — left the voice chat")
         except Exception as e:
-            await query.edit_message_text(f"🚫 **error:**\n\n`{e}`", reply_markup=bcl)
+            await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
+    else:
+        await query.answer("❌ nothing is currently streaming", show_alert=True)
+
+
+@Client.on_callback_query(filters.regex("cbskip"))
+async def cbskip(_, query: CallbackQuery):
+    if query.message.sender_chat:
+        return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
+    a = await _.get_chat_member(query.message.chat.id, query.from_user.id)
+    if not a.can_manage_voice_chats:
+        return await query.answer("💡 only admin with manage voice chats permission that can tap this button !", show_alert=True)
+    chat_id = query.message.chat.id
+    if chat_id in QUEUE:
+        try:
+            op = await skip_current_song(chat_id)
+            if op == 1:
+                await query.answer("⏭ queue empty — streaming ended")
+            elif op == 2:
+                await query.answer("❌ error — cleared queue & left the vc", show_alert=True)
+            else:
+                await query.answer(f"⏭ now playing: {op[0]}"[:190])
+        except Exception as e:
+            await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
     else:
         await query.answer("❌ nothing is currently streaming", show_alert=True)
 
@@ -248,11 +267,9 @@ async def cbmute(_, query: CallbackQuery):
     if chat_id in QUEUE:
         try:
             await call_py.mute_stream(chat_id)
-            await query.edit_message_text(
-                "🔇 userbot succesfully muted", reply_markup=bttn
-            )
+            await query.answer("🔇 muted")
         except Exception as e:
-            await query.edit_message_text(f"🚫 **error:**\n\n`{e}`", reply_markup=bcl)
+            await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
     else:
         await query.answer("❌ nothing is currently streaming", show_alert=True)
 
@@ -268,11 +285,9 @@ async def cbunmute(_, query: CallbackQuery):
     if chat_id in QUEUE:
         try:
             await call_py.unmute_stream(chat_id)
-            await query.edit_message_text(
-                "🔊 userbot succesfully unmuted", reply_markup=bttn
-            )
+            await query.answer("🔊 unmuted")
         except Exception as e:
-            await query.edit_message_text(f"🚫 **error:**\n\n`{e}`", reply_markup=bcl)
+            await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
     else:
         await query.answer("❌ nothing is currently streaming", show_alert=True)
 
