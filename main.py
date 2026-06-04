@@ -31,6 +31,17 @@ BOT_COMMANDS = [
 ]
 
 
+async def heartbeat():
+    # Touched every 30s; the docker-compose healthcheck verifies freshness.
+    while True:
+        try:
+            with open("/tmp/heartbeat", "w") as f:
+                f.write("ok")
+        except OSError:
+            pass
+        await asyncio.sleep(30)
+
+
 async def start_bot():
     print("[INFO]: STARTING BOT CLIENT")
     await bot.start()
@@ -39,6 +50,7 @@ async def start_bot():
         print("[INFO]: BOT COMMANDS REGISTERED")
     except Exception as e:
         print(f"[WARN]: could not register bot commands: {e}")
+    asyncio.ensure_future(heartbeat())
     print("[INFO]: STARTING PYTGCALLS CLIENT")
     await call_py.start()
     await idle()

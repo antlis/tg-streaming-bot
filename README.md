@@ -31,7 +31,11 @@ Two Telegram identities are required:
      sh -c "pip install -q pyrogram==2.0.106 tgcrypto && python3 /gen.py"
    ```
    Log in with the **assistant** account, then paste the printed string into `SESSION_NAME` in `.env`.
-3. Build & run:
+3. Build & run (compose is the easy way — includes the cache volume and a healthcheck):
+   ```sh
+   docker compose up -d --build
+   ```
+   or plain docker:
    ```sh
    docker build -t musicbot .
    docker run -d --name musicbot --env-file .env -e PYTHONUNBUFFERED=1 \
@@ -61,8 +65,8 @@ Two Telegram identities are required:
 ## 🛠 Commands
 | Command | Description |
 | ------ | ------ |
-| `/play <query or YouTube URL>` | play music (or reply to an audio/voice message) |
-| `/vplay <query or YouTube URL>` | play video (or reply to a video; `/vplay 480` for quality) |
+| `/play <query or YouTube URL>` | play music (or reply to an audio / voice / audio-file message) |
+| `/vplay <query or YouTube URL> [720\|480\|360] [mute]` | play video (or reply to a video); `mute` starts it muted |
 | `/vstream <link>` | stream a live link / m3u8 / YouTube live |
 | `/pause` `/resume` `/skip` `/stop` | playback control (admins) |
 | `/vmute` `/vunmute` | mute / unmute the assistant in the voice chat |
@@ -82,13 +86,13 @@ Two Telegram identities are required:
 ### High impact
 - [ ] **Modernize the stack** — bump the base image to Python 3.11 and migrate to Pyrogram 2.x + py-tgcalls 2.x (ntgcalls). This removes three legacy workarounds at once: the `MsgId` time-sync monkeypatch, the session-string 1.x repacking in `gen_session.py`, and the yt-dlp `2025.10.14` cap (current yt-dlp handles YouTube without the `android_vr` pin). Big migration — the whole py-tgcalls streaming API changed.
 - [ ] **Stream-while-downloading** — start playback once enough of the file is buffered instead of waiting for the full download (large files currently sit silent for minutes; pipe yt-dlp/ffmpeg output instead of `--print after_move:filepath`).
-- [ ] **Download progress for YouTube** — the progress bar currently only covers Telegram file downloads; parse yt-dlp's progress output (`--newline` / `--progress-template`) and edit the status message the same way.
+- [x] **Download progress for YouTube** — the progress bar currently only covers Telegram file downloads; parse yt-dlp's progress output (`--newline` / `--progress-template`) and edit the status message the same way.
 - [x] **Auto-clean `downloads/`** — files accumulate forever; delete after playback ends (hook `on_stream_end`) or keep an LRU-capped cache. Add an optional max-file-size guard.
 
 ### Features
 - [x] Register bot commands on startup (`set_bot_commands`) so Telegram's `/` autocomplete works without manual @BotFather setup
-- [ ] `/play` should accept audio sent as a *document* (generic .mp3 file) — currently only `audio`/`voice` types are recognized
-- [ ] `/vplay <query> mute` — start a video muted in one step (today: `/vplay` then `/vmute`)
+- [x] `/play` should accept audio sent as a *document* (generic .mp3 file) — currently only `audio`/`voice` types are recognized
+- [x] `/vplay <query> mute` — start a video muted in one step (today: `/vplay` then `/vmute`)
 - [ ] `/seek <seconds>` and a now-playing elapsed/duration display on the card
 - [ ] Loop / repeat-one / shuffle modes for the queue
 - [ ] Queue management: show durations, remove an arbitrary item, reorder
@@ -98,8 +102,8 @@ Two Telegram identities are required:
 ### Code quality / ops
 - [ ] **Deduplicate `music.py` / `video.py`** — `ytsearch()`, `ytdl()`, the admin-permission gate, and the assistant-join logic are near-identical copies; extract to shared helpers
 - [x] Drop unused dependencies: `motor`, `heroku3`, `dnspython`, `future` (no imports anywhere); consolidate `youtube-search` vs `youtube-search-python`
-- [ ] Auto-invalidate the admin cache on `ChatMemberUpdated` instead of requiring manual `/reload`
-- [ ] Add `docker-compose.yml` (one-command setup for adopters) and a container healthcheck
+- [x] Auto-invalidate the admin cache on `ChatMemberUpdated` instead of requiring manual `/reload`
+- [x] Add `docker-compose.yml` (one-command setup for adopters) and a container healthcheck
 - [ ] Tests (there are none) — at least for the queue, the session-string repack, and `ytsearch` URL detection; wire into CI (the GitHub workflows are stale upstream leftovers)
 - [ ] Auto-leave the voice chat after N minutes idle (assistant currently stays parked)
 - [ ] Replace bare `except`/`print(e)` error handling with proper logging

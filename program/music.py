@@ -4,6 +4,7 @@ import os
 import re
 import asyncio
 import subprocess
+from time import time
 
 from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2
 from driver.design.thumbnail import thumb
@@ -46,14 +47,18 @@ def ytsearch(query: str):
         return 0
 
 
-async def ytdl(format: str, link: str):
+async def ytdl(format: str, link: str, status_msg=None):
     # Download the audio to a local file and return its path. YouTube 403s the
     # direct stream URL for ffmpeg, so download via yt-dlp and stream the file.
+    # If status_msg is given, it's edited with live download progress.
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
         "--no-warnings",
         "--no-playlist",
         "--no-simulate",
+        "--newline",
+        "--progress-template",
+        "download:PROG|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
         # android_vr client avoids YouTube's SABR-gating that 403s the default streams.
         "--extractor-args",
         "youtube:player_client=android_vr",
@@ -67,10 +72,47 @@ async def ytdl(format: str, link: str):
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
-    if proc.returncode == 0 and stdout.strip():
-        return 1, stdout.decode().strip().split("\n")[-1]
-    return 0, stderr.decode()
+
+    stderr_buf = []
+
+    async def _drain_stderr():
+        while True:
+            chunk = await proc.stderr.readline()
+            if not chunk:
+                break
+            stderr_buf.append(chunk.decode(errors="ignore"))
+
+    stderr_task = asyncio.ensure_future(_drain_stderr())
+
+    path = ""
+    last_edit = 0.0
+    while True:
+        raw = await proc.stdout.readline()
+        if not raw:
+            break
+        line = raw.decode(errors="ignore").strip()
+        if not line:
+            continue
+        if line.startswith("PROG|"):
+            if status_msg is not None and time() - last_edit >= 3:
+                last_edit = time()
+                parts = line.split("|")
+                pct = parts[1].strip() if len(parts) > 1 else ""
+                spd = parts[2].strip() if len(parts) > 2 else ""
+                eta = parts[3].strip() if len(parts) > 3 else ""
+                try:
+                    await status_msg.edit(
+                        f"📥 **Downloading from YouTube…** `{pct}`\n({spd}, ETA {eta})"
+                    )
+                except Exception:
+                    pass
+        else:
+            path = line  # --print after_move:filepath is the last line on success
+    await proc.wait()
+    await stderr_task
+    if proc.returncode == 0 and path:
+        return 1, path
+    return 0, ("".join(stderr_buf)[-500:] or "download failed")
 
 
 @Client.on_message(command(["play", f"play@{BOT_USERNAME}"]) & other_filters)
@@ -138,8 +180,14 @@ async def play(c: Client, m: Message):
                     f"❌ **userbot failed to join**\n\n**reason**: `{e}`"
                 )
     if replied:
-        if replied.audio or replied.voice:
-            media = replied.audio or replied.voice
+        # audio sent as a generic file/document (e.g. a bare .mp3) counts too
+        audio_doc = (
+            replied.document
+            if replied.document and (replied.document.mime_type or "").startswith("audio/")
+            else None
+        )
+        if replied.audio or replied.voice or audio_doc:
+            media = replied.audio or replied.voice or audio_doc
             ext = os.path.splitext(getattr(media, "file_name", None) or "")[1] or ".m4a"
             cached = os.path.join(os.getcwd(), "downloads", f"{media.file_unique_id}{ext}")
             if os.path.exists(cached) and os.path.getsize(cached) == media.file_size:
@@ -159,8 +207,8 @@ async def play(c: Client, m: Message):
                 songname = replied.audio.title[:70]
             elif replied.caption:
                 songname = str(replied.caption).splitlines()[0][:70]
-            elif replied.audio and replied.audio.file_name:
-                songname = replied.audio.file_name[:70]
+            elif getattr(media, "file_name", None):
+                songname = media.file_name[:70]
             elif replied.voice:
                 songname = "Voice Note"
             else:
@@ -216,7 +264,7 @@ async def play(c: Client, m: Message):
                     ctitle = await CHAT_TITLE(gcname)
                     image = await thumb(thumbnail, title, userid, ctitle)
                     format = "bestaudio[ext=m4a]"
-                    ok, ytlink = await ytdl(format, url)
+                    ok, ytlink = await ytdl(format, url, suhu)
                     if ok == 0:
                         await suhu.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")
                     else:
@@ -275,7 +323,7 @@ async def play(c: Client, m: Message):
                 ctitle = await CHAT_TITLE(gcname)
                 image = await thumb(thumbnail, title, userid, ctitle)
                 format = "bestaudio[ext=m4a]"
-                ok, ytlink = await ytdl(format, url)
+                ok, ytlink = await ytdl(format, url, suhu)
                 if ok == 0:
                     await suhu.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")
                 else:

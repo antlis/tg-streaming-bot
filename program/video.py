@@ -2,6 +2,7 @@ import os
 import re
 import asyncio
 import subprocess
+from time import time
 
 from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2
 from driver.design.thumbnail import thumb
@@ -50,16 +51,20 @@ def ytsearch(query: str):
         return 0
 
 
-async def ytdl(link):
+async def ytdl(link, status_msg=None):
     # Download (DASH video+audio, merged) to a local file and return its path.
     # YouTube 403s the progressive (itag 18) stream URL for direct ffmpeg
     # streaming, so we download via yt-dlp (which picks working DASH formats)
-    # and stream the local file instead.
+    # and stream the local file instead. If status_msg is given, it's edited
+    # with live download progress (throttled).
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
         "--no-warnings",
         "--no-playlist",
         "--no-simulate",
+        "--newline",
+        "--progress-template",
+        "download:PROG|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
         # android_vr client avoids YouTube's SABR-gating (the default clients
         # only offer the progressive itag-18 stream, which 403s).
         "--extractor-args",
@@ -78,11 +83,47 @@ async def ytdl(link):
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
-    if proc.returncode == 0 and stdout.strip():
-        return 1, stdout.decode().strip().split("\n")[-1]
-    else:
-        return 0, stderr.decode()
+
+    stderr_buf = []
+
+    async def _drain_stderr():
+        while True:
+            chunk = await proc.stderr.readline()
+            if not chunk:
+                break
+            stderr_buf.append(chunk.decode(errors="ignore"))
+
+    stderr_task = asyncio.ensure_future(_drain_stderr())
+
+    path = ""
+    last_edit = 0.0
+    while True:
+        raw = await proc.stdout.readline()
+        if not raw:
+            break
+        line = raw.decode(errors="ignore").strip()
+        if not line:
+            continue
+        if line.startswith("PROG|"):
+            if status_msg is not None and time() - last_edit >= 3:
+                last_edit = time()
+                parts = line.split("|")
+                pct = parts[1].strip() if len(parts) > 1 else ""
+                spd = parts[2].strip() if len(parts) > 2 else ""
+                eta = parts[3].strip() if len(parts) > 3 else ""
+                try:
+                    await status_msg.edit(
+                        f"📥 **Downloading from YouTube…** `{pct}`\n({spd}, ETA {eta})"
+                    )
+                except Exception:
+                    pass
+        else:
+            path = line  # --print after_move:filepath is the last line on success
+    await proc.wait()
+    await stderr_task
+    if proc.returncode == 0 and path:
+        return 1, path
+    return 0, ("".join(stderr_buf)[-500:] or "download failed")
 
 
 @Client.on_message(command(["vplay", f"vplay@{BOT_USERNAME}"]) & other_filters)
@@ -91,6 +132,9 @@ async def vplay(c: Client, m: Message):
     replied = m.reply_to_message
     chat_id = m.chat.id
     keyboard = control_panel
+    # "/vplay ... mute" starts the stream with the assistant muted
+    args = [a.lower() for a in m.command[1:]]
+    start_muted = "mute" in args
     if m.sender_chat:
         return await m.reply_text("you're an __Anonymous__ Admin !\n\n» revert back to user account from admin rights.")
     try:
@@ -167,17 +211,9 @@ async def vplay(c: Client, m: Message):
                     progress=make_progress(loser, "📥 Downloading video"),
                 )
             link = replied.link
-            if len(m.command) < 2:
-                Q = 720
-            else:
-                pq = m.text.split(None, 1)[1]
-                if pq == "720" or "480" or "360":
-                    Q = int(pq)
-                else:
-                    Q = 720
-                    await loser.edit(
-                        "» __only 720, 480, 360 allowed__ \n💡 **now streaming video in 720p**"
-                    )
+            # args may contain a quality (720/480/360) and/or "mute"
+            qargs = [a for a in args if a in ("720", "480", "360")]
+            Q = int(qargs[0]) if qargs else 720
             # Title preference: message caption (manual uploads put the title
             # there and often have no file_name) > file name > generic.
             if replied.caption:
@@ -213,6 +249,11 @@ async def vplay(c: Client, m: Message):
                     ),
                     stream_type=StreamType().local_stream,
                 )
+                if start_muted:
+                    try:
+                        await call_py.mute_stream(chat_id)
+                    except Exception:
+                        pass
                 add_to_queue(chat_id, songname, dl, link, "Video", Q)
                 await loser.delete()
                 requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
@@ -229,6 +270,10 @@ async def vplay(c: Client, m: Message):
             else:
                 loser = await c.send_message(chat_id, "🔍 **Searching...**")
                 query = m.text.split(None, 1)[1]
+            if start_muted and query.lower().endswith("mute"):
+                query = query[:-4].strip()
+                if start_muted and query.lower().endswith("mute"):
+                    query = query[:-4].strip()
                 search = ytsearch(query)
                 Q = 720
                 amaze = HighQualityVideo()
@@ -244,7 +289,7 @@ async def vplay(c: Client, m: Message):
                     gcname = m.chat.title
                     ctitle = await CHAT_TITLE(gcname)
                     image = await thumb(thumbnail, title, userid, ctitle)
-                    ok, ytlink = await ytdl(url)
+                    ok, ytlink = await ytdl(url, loser)
                     if ok == 0:
                         await loser.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")
                     else:
@@ -271,6 +316,11 @@ async def vplay(c: Client, m: Message):
                                     ),
                                     stream_type=StreamType().local_stream,
                                 )
+                                if start_muted:
+                                    try:
+                                        await call_py.mute_stream(chat_id)
+                                    except Exception:
+                                        pass
                                 add_to_queue(chat_id, songname, ytlink, url, "Video", Q)
                                 await loser.delete()
                                 requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
@@ -306,7 +356,7 @@ async def vplay(c: Client, m: Message):
                 gcname = m.chat.title
                 ctitle = await CHAT_TITLE(gcname)
                 image = await thumb(thumbnail, title, userid, ctitle)
-                ok, ytlink = await ytdl(url)
+                ok, ytlink = await ytdl(url, loser)
                 if ok == 0:
                     await loser.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")
                 else:
@@ -333,6 +383,11 @@ async def vplay(c: Client, m: Message):
                                 ),
                                 stream_type=StreamType().local_stream,
                             )
+                            if start_muted:
+                                try:
+                                    await call_py.mute_stream(chat_id)
+                                except Exception:
+                                    pass
                             add_to_queue(chat_id, songname, ytlink, url, "Video", Q)
                             await loser.delete()
                             requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
@@ -435,7 +490,7 @@ async def vstream(c: Client, m: Message):
         regex = r"^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+"
         match = re.match(regex, link)
         if match:
-            ok, livelink = await ytdl(link)
+            ok, livelink = await ytdl(link, loser)
         else:
             livelink = link
             ok = 1

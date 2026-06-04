@@ -1,4 +1,5 @@
 from cache.admins import admins
+from cache.admins import delete as invalidate_admin_cache
 from driver.clients import call_py
 from pyrogram import Client, filters
 from driver.decorators import authorized_users_only
@@ -36,6 +37,13 @@ async def update_admin(client, message):
     await message.reply_text(
         "✅ Bot **reloaded correctly !**\n✅ **Admin list** has **updated !**"
     )
+
+
+@Client.on_chat_member_updated()
+async def _admin_change_watcher(client, event):
+    # Any promotion/demotion/membership change invalidates the cached admin
+    # list for that chat — it gets refetched on next use (no /reload needed).
+    invalidate_admin_cache(event.chat.id)
 
 
 @Client.on_message(command(["skip", f"skip@{BOT_USERNAME}", "vskip"]) & other_filters)

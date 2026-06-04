@@ -13,3 +13,8 @@ def get(chat_id: int) -> List[int]:
     if chat_id in admins:
         return admins[chat_id]
     return []
+
+
+def delete(chat_id: int):
+    """Invalidate a chat's cached admin list (refetched on next use)."""
+    admins.pop(chat_id, None)

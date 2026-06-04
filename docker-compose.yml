@@ -1,0 +1,20 @@
+services:
+  bot:
+    build: .
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # persists the downloads cache (instant replays of the same Telegram file)
+      - downloads:/app/downloads
+    restart: unless-stopped
+    healthcheck:
+      # main.py touches /tmp/heartbeat every 30s; unhealthy if it goes stale
+      test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/heartbeat 2>/dev/null || echo 0) )) -lt 120"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  downloads:
