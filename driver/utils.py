@@ -194,6 +194,7 @@ async def skip_item(chat_id, h):
 )
 async def chat_update_handler(_, update):
     chat_id = update.chat_id
+    print(f"[CALL]: chat update in {chat_id}: {update.status} — clearing queue")
     if chat_id in QUEUE:
         clear_queue(chat_id)
     prune_downloads()
@@ -204,6 +205,7 @@ async def chat_update_handler(_, update):
 @call_py.on_update(call_filters.stream_end(StreamEnded.Type.AUDIO))
 async def stream_end_handler(_, update):
     chat_id = update.chat_id
+    print(f"[CALL]: stream ended in {chat_id} — advancing queue")
     op = await skip_current_song(chat_id)
     if op == 1:
         await bot.send_message(chat_id, "✅ streaming end")
