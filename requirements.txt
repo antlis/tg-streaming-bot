@@ -6,14 +6,10 @@ youtube-search-python==1.4.9
 yt-dlp
 youtube-search
 python-dotenv
-dnspython
 gitpython
 aiofiles
 aiohttp
 requests
 pillow
-heroku3
-motor
 psutil
-future
 wget

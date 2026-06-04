@@ -50,6 +50,7 @@ Two Telegram identities are required:
 | `SESSION_NAME` | ✅ | assistant session string (step 2) |
 | `SUDO_USERS` | ✅ | space-separated admin user ids |
 | `DURATION_LIMIT` | — | max track length (minutes) |
+| `DOWNLOADS_CACHE_LIMIT_MB` | — | downloads-cache cap in MB, pruned after each stream (default 4096; 0 = delete after playing) |
 | `ASSISTANT_NAME` | — | assistant @username (without @), used in messages |
 | `OWNER_NAME` / `ALIVE_NAME` | — | owner link & name for `/start` and `/alive`; empty = hidden |
 | `GROUP_SUPPORT` / `UPDATES_CHANNEL` | — | username or `+invitehash` for the Group/Channel buttons; empty = hidden |
@@ -82,10 +83,10 @@ Two Telegram identities are required:
 - [ ] **Modernize the stack** — bump the base image to Python 3.11 and migrate to Pyrogram 2.x + py-tgcalls 2.x (ntgcalls). This removes three legacy workarounds at once: the `MsgId` time-sync monkeypatch, the session-string 1.x repacking in `gen_session.py`, and the yt-dlp `2025.10.14` cap (current yt-dlp handles YouTube without the `android_vr` pin). Big migration — the whole py-tgcalls streaming API changed.
 - [ ] **Stream-while-downloading** — start playback once enough of the file is buffered instead of waiting for the full download (large files currently sit silent for minutes; pipe yt-dlp/ffmpeg output instead of `--print after_move:filepath`).
 - [ ] **Download progress for YouTube** — the progress bar currently only covers Telegram file downloads; parse yt-dlp's progress output (`--newline` / `--progress-template`) and edit the status message the same way.
-- [ ] **Auto-clean `downloads/`** — files accumulate forever; delete after playback ends (hook `on_stream_end`) or keep an LRU-capped cache. Add an optional max-file-size guard.
+- [x] **Auto-clean `downloads/`** — files accumulate forever; delete after playback ends (hook `on_stream_end`) or keep an LRU-capped cache. Add an optional max-file-size guard.
 
 ### Features
-- [ ] Register bot commands on startup (`set_bot_commands`) so Telegram's `/` autocomplete works without manual @BotFather setup
+- [x] Register bot commands on startup (`set_bot_commands`) so Telegram's `/` autocomplete works without manual @BotFather setup
 - [ ] `/play` should accept audio sent as a *document* (generic .mp3 file) — currently only `audio`/`voice` types are recognized
 - [ ] `/vplay <query> mute` — start a video muted in one step (today: `/vplay` then `/vmute`)
 - [ ] `/seek <seconds>` and a now-playing elapsed/duration display on the card
@@ -96,7 +97,7 @@ Two Telegram identities are required:
 
 ### Code quality / ops
 - [ ] **Deduplicate `music.py` / `video.py`** — `ytsearch()`, `ytdl()`, the admin-permission gate, and the assistant-join logic are near-identical copies; extract to shared helpers
-- [ ] Drop unused dependencies: `motor`, `heroku3`, `dnspython`, `future` (no imports anywhere); consolidate `youtube-search` vs `youtube-search-python`
+- [x] Drop unused dependencies: `motor`, `heroku3`, `dnspython`, `future` (no imports anywhere); consolidate `youtube-search` vs `youtube-search-python`
 - [ ] Auto-invalidate the admin cache on `ChatMemberUpdated` instead of requiring manual `/reload`
 - [ ] Add `docker-compose.yml` (one-command setup for adopters) and a container healthcheck
 - [ ] Tests (there are none) — at least for the queue, the session-string repack, and `ytsearch` URL detection; wire into CI (the GitHub workflows are stale upstream leftovers)

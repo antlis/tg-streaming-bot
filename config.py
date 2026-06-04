@@ -27,6 +27,9 @@ SUDO_USERS = list(map(int, getenv("SUDO_USERS").split()))
 COMMAND_PREFIXES = list(getenv("COMMAND_PREFIXES", "/ ! .").split())
 ALIVE_IMG = getenv("ALIVE_IMG", _DEFAULT_IMG)
 DURATION_LIMIT = int(getenv("DURATION_LIMIT", "540000"))
+# Max size of the downloads cache in MB; pruned (oldest first) after each
+# stream ends. 0 = delete everything not queued as soon as a stream ends.
+DOWNLOADS_CACHE_LIMIT_MB = int(getenv("DOWNLOADS_CACHE_LIMIT_MB", "4096"))
 UPSTREAM_REPO = getenv("UPSTREAM_REPO", "")
 IMG_1 = getenv("IMG_1", _DEFAULT_IMG)
 IMG_2 = getenv("IMG_2", _DEFAULT_IMG)

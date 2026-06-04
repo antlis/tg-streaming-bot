@@ -157,6 +157,7 @@ async def vplay(c: Client, m: Message):
             cached = os.path.join(os.getcwd(), "downloads", f"{media.file_unique_id}{ext}")
             if os.path.exists(cached) and os.path.getsize(cached) == media.file_size:
                 # same Telegram file already fully downloaded — reuse it
+                os.utime(cached, None)  # mark fresh for the LRU cache pruner
                 loser = await replied.reply("📦 **already downloaded — starting...**")
                 dl = cached
             else:

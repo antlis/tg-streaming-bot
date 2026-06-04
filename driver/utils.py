@@ -1,6 +1,7 @@
 import os
 import asyncio
 from time import time
+from config import DOWNLOADS_CACHE_LIMIT_MB
 from driver.clients import bot, call_py
 from pytgcalls.types import Update
 from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
@@ -76,6 +77,43 @@ def make_progress(message, label="📥 Downloading"):
     return progress
 
 
+def _queued_paths():
+    """Local file paths referenced by any chat's active queue (never prune these)."""
+    used = set()
+    for chat_queue in QUEUE.values():
+        for item in chat_queue:
+            used.add(item[1])
+    return used
+
+
+def prune_downloads():
+    """Keep downloads/ under DOWNLOADS_CACHE_LIMIT_MB by deleting the oldest
+    cached files first. Files still referenced by a queue are never touched.
+    A limit of 0 clears everything that isn't queued."""
+    limit = DOWNLOADS_CACHE_LIMIT_MB * 1024 * 1024
+    folder = os.path.join(os.getcwd(), "downloads")
+    if not os.path.isdir(folder):
+        return
+    used = _queued_paths()
+    files = []
+    for name in os.listdir(folder):
+        path = os.path.join(folder, name)
+        if os.path.isfile(path) and path not in used:
+            try:
+                files.append((os.path.getmtime(path), path, os.path.getsize(path)))
+            except OSError:
+                pass
+    total = sum(size for _, _, size in files)
+    for _, path, size in sorted(files):  # oldest first
+        if total <= limit:
+            break
+        try:
+            os.remove(path)
+            total -= size
+        except OSError:
+            pass
+
+
 async def skip_current_song(chat_id):
     if chat_id in QUEUE:
         chat_queue = get_queue(chat_id)
@@ -136,25 +174,27 @@ async def skip_item(chat_id, h):
 async def kicked_handler(_, chat_id: int):
     if chat_id in QUEUE:
         clear_queue(chat_id)
+    prune_downloads()
 
 
 @call_py.on_closed_voice_chat()
 async def closed_voice_chat_handler(_, chat_id: int):
     if chat_id in QUEUE:
         clear_queue(chat_id)
+    prune_downloads()
 
 
 @call_py.on_left()
 async def left_handler(_, chat_id: int):
     if chat_id in QUEUE:
         clear_queue(chat_id)
+    prune_downloads()
 
 
 @call_py.on_stream_end()
 async def stream_end_handler(_, u: Update):
     if isinstance(u, StreamAudioEnded):
         chat_id = u.chat_id
-        print(chat_id)
         op = await skip_current_song(chat_id)
         if op==1:
            await bot.send_message(chat_id, "✅ streaming end")
@@ -162,6 +202,7 @@ async def stream_end_handler(_, u: Update):
            await bot.send_message(chat_id, "❌ an error occurred\n\n» **Clearing** __Queues__ and leaving video chat.")
         else:
          await bot.send_message(chat_id, f"💡 **Streaming next track**\n\n🏷 **Name:** [{op[0]}]({op[1]}) | `{op[2]}`\n💭 **Chat:** `{chat_id}`", disable_web_page_preview=True, reply_markup=keyboard)
+        prune_downloads()
     else:
        pass
 
