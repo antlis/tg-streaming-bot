@@ -239,8 +239,9 @@ async def vplay(c: Client, m: Message):
                     amaze = MediumQualityVideo()
                 elif Q == 360:
                     amaze = LowQualityVideo()
-                await loser.edit("🔄 **Joining vc...**")
-                await call_py.join_group_call(
+                try:
+                  await loser.edit("🔄 **Joining vc...**")
+                  await call_py.join_group_call(
                     chat_id,
                     AudioVideoPiped(
                         dl,
@@ -248,20 +249,23 @@ async def vplay(c: Client, m: Message):
                         amaze,
                     ),
                     stream_type=StreamType().local_stream,
-                )
-                if start_muted:
-                    try:
-                        await call_py.mute_stream(chat_id)
-                    except Exception:
-                        pass
-                add_to_queue(chat_id, songname, dl, link, "Video", Q)
-                await loser.delete()
-                requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
-                await m.reply_photo(
+                  )
+                  if start_muted:
+                      try:
+                          await call_py.mute_stream(chat_id)
+                      except Exception:
+                          pass
+                  add_to_queue(chat_id, songname, dl, link, "Video", Q)
+                  await loser.delete()
+                  requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
+                  await m.reply_photo(
                     photo=f"{IMG_2}",
                     caption=f"🏷 **Name:** [{songname}]({link})\n💭 **Chat:** `{chat_id}`\n💡 **Status:** `Playing`\n🎧 **Request by:** {requester}\n📹 **Stream type:** `Video`",
                     reply_markup=keyboard,
-                )
+                  )
+                except Exception as ep:
+                  await loser.delete()
+                  await m.reply_text(f"🚫 error: `{ep}`")
         else:
             if len(m.command) < 2:
                 await m.reply(
@@ -270,8 +274,6 @@ async def vplay(c: Client, m: Message):
             else:
                 loser = await c.send_message(chat_id, "🔍 **Searching...**")
                 query = m.text.split(None, 1)[1]
-            if start_muted and query.lower().endswith("mute"):
-                query = query[:-4].strip()
                 if start_muted and query.lower().endswith("mute"):
                     query = query[:-4].strip()
                 search = ytsearch(query)
@@ -485,7 +487,7 @@ async def vstream(c: Client, m: Message):
                 )
             loser = await c.send_message(chat_id, "🔄 **processing stream...**")
         else:
-            await m.reply("**/vstream {link} {720/480/360}**")
+            return await m.reply("**/vstream {link} {720/480/360}**")
 
         regex = r"^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+"
         match = re.match(regex, link)

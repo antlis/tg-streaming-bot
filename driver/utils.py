@@ -39,11 +39,13 @@ control_panel = InlineKeyboardMarkup(
             InlineKeyboardButton("⏸", callback_data="cbpause"),
             InlineKeyboardButton("▶️", callback_data="cbresume"),
             InlineKeyboardButton("⏭", callback_data="cbskip"),
+            InlineKeyboardButton("⏹", callback_data="cbstop"),
         ],
         [
+            InlineKeyboardButton("🔉", callback_data="cbvoldown"),
+            InlineKeyboardButton("🔊", callback_data="cbvolup"),
             InlineKeyboardButton("🔇", callback_data="cbmute"),
-            InlineKeyboardButton("🔊", callback_data="cbunmute"),
-            InlineKeyboardButton("⏹", callback_data="cbstop"),
+            InlineKeyboardButton("🔈", callback_data="cbunmute"),
         ],
         [
             InlineKeyboardButton("🗑 Close", callback_data="cls"),

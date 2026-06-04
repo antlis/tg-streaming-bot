@@ -24,6 +24,10 @@ bcl = InlineKeyboardMarkup(
     [[InlineKeyboardButton("🗑 Close", callback_data="cls")]]
 )
 
+# Per-chat current volume (0-200) so the 🔉/🔊 buttons can step relative to it.
+VOLUME = {}
+VOLUME_STEP = 20
+
 
 @Client.on_message(command(["reload", f"reload@{BOT_USERNAME}"]) & other_filters)
 @authorized_users_only
@@ -309,11 +313,41 @@ async def change_volume(client, m: Message):
     chat_id = m.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.change_volume_call(chat_id, volume=int(range))
+            vol = max(0, min(200, int(range)))
+            await call_py.change_volume_call(chat_id, volume=vol)
+            VOLUME[chat_id] = vol
             await m.reply(
-                f"✅ **volume set to** `{range}`%"
+                f"✅ **volume set to** `{vol}`%"
             )
         except Exception as e:
             await m.reply(f"🚫 **error:**\n\n`{e}`")
     else:
         await m.reply("❌ **nothing in streaming**")
+
+
+async def _step_volume(_, query: CallbackQuery, delta: int):
+    if query.message.sender_chat:
+        return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
+    a = await _.get_chat_member(query.message.chat.id, query.from_user.id)
+    if not a.can_manage_voice_chats:
+        return await query.answer("💡 only admin with manage voice chats permission that can tap this button !", show_alert=True)
+    chat_id = query.message.chat.id
+    if chat_id not in QUEUE:
+        return await query.answer("❌ nothing is currently streaming", show_alert=True)
+    new_vol = max(0, min(200, VOLUME.get(chat_id, 100) + delta))
+    try:
+        await call_py.change_volume_call(chat_id, volume=new_vol)
+        VOLUME[chat_id] = new_vol
+        await query.answer(f"🔊 volume {new_vol}%")
+    except Exception as e:
+        await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
+
+
+@Client.on_callback_query(filters.regex("cbvolup"))
+async def cbvolup(_, query: CallbackQuery):
+    await _step_volume(_, query, VOLUME_STEP)
+
+
+@Client.on_callback_query(filters.regex("cbvoldown"))
+async def cbvoldown(_, query: CallbackQuery):
+    await _step_volume(_, query, -VOLUME_STEP)
