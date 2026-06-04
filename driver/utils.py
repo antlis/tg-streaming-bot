@@ -5,7 +5,7 @@ from config import DOWNLOADS_CACHE_LIMIT_MB
 from driver.clients import bot, call_py
 from driver.queues import QUEUE, clear_queue, get_queue, pop_an_item
 from pytgcalls import filters as call_filters
-from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, ChatUpdate
+from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, ChatUpdate, StreamEnded
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import (
     CallbackQuery,
@@ -199,7 +199,9 @@ async def chat_update_handler(_, update):
     prune_downloads()
 
 
-@call_py.on_update(call_filters.stream_end)
+# NB: filters are classes — register an INSTANCE (stream_end()), not the class.
+# Scope to the audio track so a video ending doesn't fire the skip twice.
+@call_py.on_update(call_filters.stream_end(StreamEnded.Type.AUDIO))
 async def stream_end_handler(_, update):
     chat_id = update.chat_id
     op = await skip_current_song(chat_id)
