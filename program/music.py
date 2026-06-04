@@ -1,5 +1,6 @@
 
 
+import os
 import re
 import asyncio
 import subprocess
@@ -138,19 +139,31 @@ async def play(c: Client, m: Message):
                 )
     if replied:
         if replied.audio or replied.voice:
-            suhu = await replied.reply("📥 **downloading audio...**")
-            dl = await replied.download(progress=make_progress(suhu, "📥 Downloading audio"))
+            media = replied.audio or replied.voice
+            ext = os.path.splitext(getattr(media, "file_name", None) or "")[1] or ".m4a"
+            cached = os.path.join(os.getcwd(), "downloads", f"{media.file_unique_id}{ext}")
+            if os.path.exists(cached) and os.path.getsize(cached) == media.file_size:
+                # same Telegram file already fully downloaded — reuse it
+                suhu = await replied.reply("📦 **already downloaded — starting...**")
+                dl = cached
+            else:
+                suhu = await replied.reply("📥 **downloading audio...**")
+                dl = await replied.download(
+                    file_name=cached,
+                    progress=make_progress(suhu, "📥 Downloading audio"),
+                )
             link = replied.link
-            if replied.audio:
-                if replied.audio.title:
-                    songname = replied.audio.title[:70]
-                else:
-                    if replied.audio.file_name:
-                        songname = replied.audio.file_name[:70]
-                    else:
-                        songname = "Audio"
+            # Title preference: audio metadata title > caption > file name > generic
+            if replied.audio and replied.audio.title:
+                songname = replied.audio.title[:70]
+            elif replied.caption:
+                songname = str(replied.caption).splitlines()[0][:70]
+            elif replied.audio and replied.audio.file_name:
+                songname = replied.audio.file_name[:70]
             elif replied.voice:
                 songname = "Voice Note"
+            else:
+                songname = "Audio"
             if chat_id in QUEUE:
                 pos = add_to_queue(chat_id, songname, dl, link, "Audio", 0)
                 await suhu.delete()

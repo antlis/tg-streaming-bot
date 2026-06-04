@@ -1,3 +1,4 @@
+import os
 import re
 import asyncio
 import subprocess
@@ -151,8 +152,19 @@ async def vplay(c: Client, m: Message):
 
     if replied:
         if replied.video or replied.document:
-            loser = await replied.reply("📥 **downloading video...**")
-            dl = await replied.download(progress=make_progress(loser, "📥 Downloading video"))
+            media = replied.video or replied.document
+            ext = os.path.splitext(media.file_name or "")[1] or ".mp4"
+            cached = os.path.join(os.getcwd(), "downloads", f"{media.file_unique_id}{ext}")
+            if os.path.exists(cached) and os.path.getsize(cached) == media.file_size:
+                # same Telegram file already fully downloaded — reuse it
+                loser = await replied.reply("📦 **already downloaded — starting...**")
+                dl = cached
+            else:
+                loser = await replied.reply("📥 **downloading video...**")
+                dl = await replied.download(
+                    file_name=cached,
+                    progress=make_progress(loser, "📥 Downloading video"),
+                )
             link = replied.link
             if len(m.command) < 2:
                 Q = 720
@@ -165,12 +177,13 @@ async def vplay(c: Client, m: Message):
                     await loser.edit(
                         "» __only 720, 480, 360 allowed__ \n💡 **now streaming video in 720p**"
                     )
-            try:
-                if replied.video:
-                    songname = replied.video.file_name[:70]
-                elif replied.document:
-                    songname = replied.document.file_name[:70]
-            except BaseException:
+            # Title preference: message caption (manual uploads put the title
+            # there and often have no file_name) > file name > generic.
+            if replied.caption:
+                songname = str(replied.caption).splitlines()[0][:70]
+            elif media.file_name:
+                songname = media.file_name[:70]
+            else:
                 songname = "Video"
 
             if chat_id in QUEUE:

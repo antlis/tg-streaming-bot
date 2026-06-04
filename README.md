@@ -34,7 +34,9 @@ Two Telegram identities are required:
 3. Build & run:
    ```sh
    docker build -t musicbot .
-   docker run -d --name musicbot --env-file .env -e PYTHONUNBUFFERED=1 --restart unless-stopped musicbot
+   docker run -d --name musicbot --env-file .env -e PYTHONUNBUFFERED=1 \
+     -v musicbot_downloads:/app/downloads \
+     --restart unless-stopped musicbot
    ```
 4. In the group: add the bot (as admin), start a voice chat, then `/play <song>`.
 
