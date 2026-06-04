@@ -3,15 +3,10 @@ import asyncio
 from time import time
 from config import DOWNLOADS_CACHE_LIMIT_MB
 from driver.clients import bot, call_py
-from pytgcalls.types import Update
-from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
 from driver.queues import QUEUE, clear_queue, get_queue, pop_an_item
-from pytgcalls.types.input_stream.quality import (
-    HighQualityAudio,
-    HighQualityVideo,
-    LowQualityVideo,
-    MediumQualityVideo,
-)
+from pytgcalls import filters as call_filters
+from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, ChatUpdate
+from pyrogram.enums import ChatMemberStatus
 from pyrogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -19,7 +14,33 @@ from pyrogram.types import (
     Message,
 )
 from pyrogram import Client, filters
-from pytgcalls.types.stream import StreamAudioEnded, StreamVideoEnded
+
+
+_VQ = {720: VideoQuality.HD_720p, 480: VideoQuality.SD_480p, 360: VideoQuality.SD_360p}
+
+
+def media_audio(path):
+    """Audio-only MediaStream (ignore the video track)."""
+    return MediaStream(path, video_flags=MediaStream.Flags.IGNORE)
+
+
+def media_video(path, quality=720):
+    """Audio+video MediaStream at the given vertical resolution."""
+    return MediaStream(
+        path,
+        audio_parameters=AudioQuality.HIGH,
+        video_parameters=_VQ.get(quality, VideoQuality.HD_720p),
+    )
+
+
+def can_manage_vc(member) -> bool:
+    """Pyrogram 2.x: owners implicitly have every right; admins need the
+    can_manage_video_chats privilege."""
+    if member.status == ChatMemberStatus.OWNER:
+        return True
+    if member.status == ChatMemberStatus.ADMINISTRATOR:
+        return bool(member.privileges and member.privileges.can_manage_video_chats)
+    return False
 
 
 keyboard = InlineKeyboardMarkup(
@@ -120,7 +141,7 @@ async def skip_current_song(chat_id):
     if chat_id in QUEUE:
         chat_queue = get_queue(chat_id)
         if len(chat_queue) == 1:
-            await call_py.leave_group_call(chat_id)
+            await call_py.leave_call(chat_id)
             clear_queue(chat_id)
             return 1
         else:
@@ -131,26 +152,13 @@ async def skip_current_song(chat_id):
                 type = chat_queue[1][3]
                 Q = chat_queue[1][4]
                 if type == "Audio":
-                    await call_py.change_stream(
-                        chat_id,
-                        AudioPiped(
-                            url,
-                        ),
-                    )
+                    await call_py.play(chat_id, media_audio(url))
                 elif type == "Video":
-                    if Q == 720:
-                        hm = HighQualityVideo()
-                    elif Q == 480:
-                        hm = MediumQualityVideo()
-                    elif Q == 360:
-                        hm = LowQualityVideo()
-                    await call_py.change_stream(
-                        chat_id, AudioVideoPiped(url, HighQualityAudio(), hm)
-                    )
+                    await call_py.play(chat_id, media_video(url, Q))
                 pop_an_item(chat_id)
                 return [songname, link, type]
             except:
-                await call_py.leave_group_call(chat_id)
+                await call_py.leave_call(chat_id)
                 clear_queue(chat_id)
                 return 2
     else:
@@ -172,41 +180,33 @@ async def skip_item(chat_id, h):
         return 0
 
 
-@call_py.on_kicked()
-async def kicked_handler(_, chat_id: int):
+# py-tgcalls 2.x: lifecycle is delivered through on_update + filters instead of
+# the old per-event decorators (on_kicked / on_closed_voice_chat / on_left).
+@call_py.on_update(
+    call_filters.chat_update(
+        ChatUpdate.Status.KICKED
+        | ChatUpdate.Status.LEFT_GROUP
+        | ChatUpdate.Status.CLOSED_VOICE_CHAT
+    )
+)
+async def chat_update_handler(_, update):
+    chat_id = update.chat_id
     if chat_id in QUEUE:
         clear_queue(chat_id)
     prune_downloads()
 
 
-@call_py.on_closed_voice_chat()
-async def closed_voice_chat_handler(_, chat_id: int):
-    if chat_id in QUEUE:
-        clear_queue(chat_id)
-    prune_downloads()
-
-
-@call_py.on_left()
-async def left_handler(_, chat_id: int):
-    if chat_id in QUEUE:
-        clear_queue(chat_id)
-    prune_downloads()
-
-
-@call_py.on_stream_end()
-async def stream_end_handler(_, u: Update):
-    if isinstance(u, StreamAudioEnded):
-        chat_id = u.chat_id
-        op = await skip_current_song(chat_id)
-        if op==1:
-           await bot.send_message(chat_id, "✅ streaming end")
-        elif op==2:
-           await bot.send_message(chat_id, "❌ an error occurred\n\n» **Clearing** __Queues__ and leaving video chat.")
-        else:
-         await bot.send_message(chat_id, f"💡 **Streaming next track**\n\n🏷 **Name:** [{op[0]}]({op[1]}) | `{op[2]}`\n💭 **Chat:** `{chat_id}`", disable_web_page_preview=True, reply_markup=keyboard)
-        prune_downloads()
+@call_py.on_update(call_filters.stream_end)
+async def stream_end_handler(_, update):
+    chat_id = update.chat_id
+    op = await skip_current_song(chat_id)
+    if op == 1:
+        await bot.send_message(chat_id, "✅ streaming end")
+    elif op == 2:
+        await bot.send_message(chat_id, "❌ an error occurred\n\n» **Clearing** __Queues__ and leaving video chat.")
     else:
-       pass
+        await bot.send_message(chat_id, f"💡 **Streaming next track**\n\n🏷 **Name:** [{op[0]}]({op[1]}) | `{op[2]}`\n💭 **Chat:** `{chat_id}`", disable_web_page_preview=True, reply_markup=keyboard)
+    prune_downloads()
 
 
 async def bash(cmd):

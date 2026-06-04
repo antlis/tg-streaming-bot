@@ -5,8 +5,9 @@ from pyrogram import Client, filters
 from driver.decorators import authorized_users_only
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, clear_queue
-from driver.utils import skip_current_song, skip_item
+from driver.utils import skip_current_song, skip_item, can_manage_vc
 from config import BOT_USERNAME, GROUP_SUPPORT, IMG_3, UPDATES_CHANNEL
+from pyrogram.enums import ChatMembersFilter
 from pyrogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -34,8 +35,9 @@ VOLUME_STEP = 20
 async def update_admin(client, message):
     global admins
     new_admins = []
-    new_ads = await client.get_chat_members(message.chat.id, filter="administrators")
-    for u in new_ads:
+    async for u in client.get_chat_members(
+        message.chat.id, filter=ChatMembersFilter.ADMINISTRATORS
+    ):
         new_admins.append(u.user.id)
     admins[message.chat.id] = new_admins
     await message.reply_text(
@@ -109,7 +111,7 @@ async def stop(client, m: Message):
     chat_id = m.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.leave_group_call(chat_id)
+            await call_py.leave_call(chat_id)
             clear_queue(chat_id)
             await m.reply("✅ The userbot has disconnected from the video chat.")
         except Exception as e:
@@ -126,7 +128,7 @@ async def pause(client, m: Message):
     chat_id = m.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.pause_stream(chat_id)
+            await call_py.pause(chat_id)
             await m.reply(
                 "⏸ **Track paused.**\n\n• **To resume the stream, use the**\n» /resume command."
             )
@@ -144,7 +146,7 @@ async def resume(client, m: Message):
     chat_id = m.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.resume_stream(chat_id)
+            await call_py.resume(chat_id)
             await m.reply(
                 "▶️ **Track resumed.**\n\n• **To pause the stream, use the**\n» /pause command."
             )
@@ -162,7 +164,7 @@ async def mute(client, m: Message):
     chat_id = m.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.mute_stream(chat_id)
+            await call_py.mute(chat_id)
             await m.reply(
                 "🔇 **Userbot muted.**\n\n• **To unmute the userbot, use the**\n» /unmute command."
             )
@@ -180,7 +182,7 @@ async def unmute(client, m: Message):
     chat_id = m.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.unmute_stream(chat_id)
+            await call_py.unmute(chat_id)
             await m.reply(
                 "🔊 **Userbot unmuted.**\n\n• **To mute the userbot, use the**\n» /mute command."
             )
@@ -195,12 +197,12 @@ async def cbpause(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
     a = await _.get_chat_member(query.message.chat.id, query.from_user.id)
-    if not a.can_manage_voice_chats:
+    if not can_manage_vc(a):
         return await query.answer("💡 only admin with manage voice chats permission that can tap this button !", show_alert=True)
     chat_id = query.message.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.pause_stream(chat_id)
+            await call_py.pause(chat_id)
             await query.answer("⏸ paused")
         except Exception as e:
             await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
@@ -213,12 +215,12 @@ async def cbresume(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
     a = await _.get_chat_member(query.message.chat.id, query.from_user.id)
-    if not a.can_manage_voice_chats:
+    if not can_manage_vc(a):
         return await query.answer("💡 only admin with manage voice chats permission that can tap this button !", show_alert=True)
     chat_id = query.message.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.resume_stream(chat_id)
+            await call_py.resume(chat_id)
             await query.answer("▶️ resumed")
         except Exception as e:
             await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
@@ -231,12 +233,12 @@ async def cbstop(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
     a = await _.get_chat_member(query.message.chat.id, query.from_user.id)
-    if not a.can_manage_voice_chats:
+    if not can_manage_vc(a):
         return await query.answer("💡 only admin with manage voice chats permission that can tap this button !", show_alert=True)
     chat_id = query.message.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.leave_group_call(chat_id)
+            await call_py.leave_call(chat_id)
             clear_queue(chat_id)
             await query.answer("⏹ stopped — left the voice chat")
         except Exception as e:
@@ -250,7 +252,7 @@ async def cbskip(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
     a = await _.get_chat_member(query.message.chat.id, query.from_user.id)
-    if not a.can_manage_voice_chats:
+    if not can_manage_vc(a):
         return await query.answer("💡 only admin with manage voice chats permission that can tap this button !", show_alert=True)
     chat_id = query.message.chat.id
     if chat_id in QUEUE:
@@ -273,12 +275,12 @@ async def cbmute(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
     a = await _.get_chat_member(query.message.chat.id, query.from_user.id)
-    if not a.can_manage_voice_chats:
+    if not can_manage_vc(a):
         return await query.answer("💡 only admin with manage voice chats permission that can tap this button !", show_alert=True)
     chat_id = query.message.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.mute_stream(chat_id)
+            await call_py.mute(chat_id)
             await query.answer("🔇 muted")
         except Exception as e:
             await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
@@ -291,12 +293,12 @@ async def cbunmute(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
     a = await _.get_chat_member(query.message.chat.id, query.from_user.id)
-    if not a.can_manage_voice_chats:
+    if not can_manage_vc(a):
         return await query.answer("💡 only admin with manage voice chats permission that can tap this button !", show_alert=True)
     chat_id = query.message.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.unmute_stream(chat_id)
+            await call_py.unmute(chat_id)
             await query.answer("🔊 unmuted")
         except Exception as e:
             await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
@@ -329,7 +331,7 @@ async def _step_volume(_, query: CallbackQuery, delta: int):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
     a = await _.get_chat_member(query.message.chat.id, query.from_user.id)
-    if not a.can_manage_voice_chats:
+    if not can_manage_vc(a):
         return await query.answer("💡 only admin with manage voice chats permission that can tap this button !", show_alert=True)
     chat_id = query.message.chat.id
     if chat_id not in QUEUE:

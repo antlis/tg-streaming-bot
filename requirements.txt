@@ -1,9 +1,9 @@
 tgcrypto
 ffmpeg-python
-py-tgcalls==0.9.7
-pyrogram==1.4.16
-youtube-search-python==1.4.9
+py-tgcalls
+kurigram
 yt-dlp
+youtube-search-python==1.4.9
 youtube-search
 python-dotenv
 gitpython

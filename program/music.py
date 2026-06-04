@@ -12,12 +12,11 @@ from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue
 from driver.clients import call_py, user
-from driver.utils import bash, make_progress, control_panel
+from driver.utils import bash, make_progress, control_panel, media_audio
 from pyrogram import Client
+from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
-from pytgcalls import StreamType
-from pytgcalls.types.input_stream import AudioPiped
 from youtubesearchpython import VideosSearch
 
 
@@ -128,28 +127,29 @@ async def play(c: Client, m: Message):
     except Exception as e:
         return await m.reply_text(f"error:\n\n{e}")
     a = await c.get_chat_member(chat_id, aing.id)
-    if a.status != "administrator":
+    if a.status not in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
         await m.reply_text(
             f"💡 To use me, I need to be an **Administrator** with the following **permissions**:\n\n» ❌ __Delete messages__\n» ❌ __Add users__\n» ❌ __Manage video chat__\n\nData is **updated** automatically after you **promote me**"
         )
         return
-    if not a.can_manage_voice_chats:
+    priv = a.privileges
+    if not (priv and priv.can_manage_video_chats):
         await m.reply_text(
             "missing required permission:" + "\n\n» ❌ __Manage video chat__"
         )
         return
-    if not a.can_delete_messages:
+    if not (priv and priv.can_delete_messages):
         await m.reply_text(
             "missing required permission:" + "\n\n» ❌ __Delete messages__"
         )
         return
-    if not a.can_invite_users:
+    if not (priv and priv.can_invite_users):
         await m.reply_text("missing required permission:" + "\n\n» ❌ __Add users__")
         return
     try:
         ubot = (await user.get_me()).id
         b = await c.get_chat_member(chat_id, ubot)
-        if b.status == "kicked":
+        if b.status == ChatMemberStatus.BANNED:
             await m.reply_text(
                 f"@{ASSISTANT_NAME} **is banned in group** {m.chat.title}\n\n» **unban the userbot first if you want to use this bot.**"
             )
@@ -224,13 +224,7 @@ async def play(c: Client, m: Message):
             else:
              try:
                 await suhu.edit("🔄 **Joining vc...**")
-                await call_py.join_group_call(
-                    chat_id,
-                    AudioPiped(
-                        dl,
-                    ),
-                    stream_type=StreamType().local_stream,
-                )
+                await call_py.play(chat_id, media_audio(dl))
                 add_to_queue(chat_id, songname, dl, link, "Audio", 0)
                 await suhu.delete()
                 requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
@@ -282,13 +276,7 @@ async def play(c: Client, m: Message):
                         else:
                             try:
                                 await suhu.edit("🔄 **Joining vc...**")
-                                await call_py.join_group_call(
-                                    chat_id,
-                                    AudioPiped(
-                                        ytlink,
-                                    ),
-                                    stream_type=StreamType().local_stream,
-                                )
+                                await call_py.play(chat_id, media_audio(ytlink))
                                 add_to_queue(chat_id, songname, ytlink, url, "Audio", 0)
                                 await suhu.delete()
                                 requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
@@ -341,13 +329,7 @@ async def play(c: Client, m: Message):
                     else:
                         try:
                             await suhu.edit("🔄 **Joining vc...**")
-                            await call_py.join_group_call(
-                                chat_id,
-                                AudioPiped(
-                                    ytlink,
-                                ),
-                                stream_type=StreamType().local_stream,
-                            )
+                            await call_py.play(chat_id, media_audio(ytlink))
                             add_to_queue(chat_id, songname, ytlink, url, "Audio", 0)
                             await suhu.delete()
                             requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"

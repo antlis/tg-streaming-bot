@@ -10,18 +10,11 @@ from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue
 from driver.clients import call_py, user
-from driver.utils import make_progress, control_panel
+from driver.utils import make_progress, control_panel, media_video
 from pyrogram import Client
+from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
-from pytgcalls import StreamType
-from pytgcalls.types.input_stream import AudioVideoPiped
-from pytgcalls.types.input_stream.quality import (
-    HighQualityAudio,
-    HighQualityVideo,
-    LowQualityVideo,
-    MediumQualityVideo,
-)
 from youtubesearchpython import VideosSearch
 
 
@@ -142,28 +135,29 @@ async def vplay(c: Client, m: Message):
     except Exception as e:
         return await m.reply_text(f"error:\n\n{e}")
     a = await c.get_chat_member(chat_id, aing.id)
-    if a.status != "administrator":
+    if a.status not in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
         await m.reply_text(
             f"💡 To use me, I need to be an **Administrator** with the following **permissions**:\n\n» ❌ __Delete messages__\n» ❌ __Add users__\n» ❌ __Manage video chat__\n\nData is **updated** automatically after you **promote me**"
         )
         return
-    if not a.can_manage_voice_chats:
+    priv = a.privileges
+    if not (priv and priv.can_manage_video_chats):
         await m.reply_text(
             "missing required permission:" + "\n\n» ❌ __Manage video chat__"
         )
         return
-    if not a.can_delete_messages:
+    if not (priv and priv.can_delete_messages):
         await m.reply_text(
             "missing required permission:" + "\n\n» ❌ __Delete messages__"
         )
         return
-    if not a.can_invite_users:
+    if not (priv and priv.can_invite_users):
         await m.reply_text("missing required permission:" + "\n\n» ❌ __Add users__")
         return
     try:
         ubot = (await user.get_me()).id
         b = await c.get_chat_member(chat_id, ubot)
-        if b.status == "kicked":
+        if b.status == ChatMemberStatus.BANNED:
             await m.reply_text(
                 f"@{ASSISTANT_NAME} **is banned in group** {m.chat.title}\n\n» **unban the userbot first if you want to use this bot.**"
             )
@@ -233,26 +227,12 @@ async def vplay(c: Client, m: Message):
                     reply_markup=keyboard,
                 )
             else:
-                if Q == 720:
-                    amaze = HighQualityVideo()
-                elif Q == 480:
-                    amaze = MediumQualityVideo()
-                elif Q == 360:
-                    amaze = LowQualityVideo()
                 try:
                   await loser.edit("🔄 **Joining vc...**")
-                  await call_py.join_group_call(
-                    chat_id,
-                    AudioVideoPiped(
-                        dl,
-                        HighQualityAudio(),
-                        amaze,
-                    ),
-                    stream_type=StreamType().local_stream,
-                  )
+                  await call_py.play(chat_id, media_video(dl, Q))
                   if start_muted:
                       try:
-                          await call_py.mute_stream(chat_id)
+                          await call_py.mute(chat_id)
                       except Exception:
                           pass
                   add_to_queue(chat_id, songname, dl, link, "Video", Q)
@@ -278,7 +258,6 @@ async def vplay(c: Client, m: Message):
                     query = query[:-4].strip()
                 search = ytsearch(query)
                 Q = 720
-                amaze = HighQualityVideo()
                 if search == 0:
                     await loser.edit("❌ **no results found.**")
                 else:
@@ -309,18 +288,10 @@ async def vplay(c: Client, m: Message):
                         else:
                             try:
                                 await loser.edit("🔄 **Joining vc...**")
-                                await call_py.join_group_call(
-                                    chat_id,
-                                    AudioVideoPiped(
-                                        ytlink,
-                                        HighQualityAudio(),
-                                        amaze,
-                                    ),
-                                    stream_type=StreamType().local_stream,
-                                )
+                                await call_py.play(chat_id, media_video(ytlink, Q))
                                 if start_muted:
                                     try:
-                                        await call_py.mute_stream(chat_id)
+                                        await call_py.mute(chat_id)
                                     except Exception:
                                         pass
                                 add_to_queue(chat_id, songname, ytlink, url, "Video", Q)
@@ -345,7 +316,6 @@ async def vplay(c: Client, m: Message):
             query = m.text.split(None, 1)[1]
             search = ytsearch(query)
             Q = 720
-            amaze = HighQualityVideo()
             if search == 0:
                 await loser.edit("❌ **no results found.**")
             else:
@@ -376,18 +346,10 @@ async def vplay(c: Client, m: Message):
                     else:
                         try:
                             await loser.edit("🔄 **Joining vc...**")
-                            await call_py.join_group_call(
-                                chat_id,
-                                AudioVideoPiped(
-                                    ytlink,
-                                    HighQualityAudio(),
-                                    amaze,
-                                ),
-                                stream_type=StreamType().local_stream,
-                            )
+                            await call_py.play(chat_id, media_video(ytlink, Q))
                             if start_muted:
                                 try:
-                                    await call_py.mute_stream(chat_id)
+                                    await call_py.mute(chat_id)
                                 except Exception:
                                     pass
                             add_to_queue(chat_id, songname, ytlink, url, "Video", Q)
@@ -415,28 +377,29 @@ async def vstream(c: Client, m: Message):
     except Exception as e:
         return await m.reply_text(f"error:\n\n{e}")
     a = await c.get_chat_member(chat_id, aing.id)
-    if a.status != "administrator":
+    if a.status not in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
         await m.reply_text(
             f"💡 To use me, I need to be an **Administrator** with the following **permissions**:\n\n» ❌ __Delete messages__\n» ❌ __Add users__\n» ❌ __Manage video chat__\n\nData is **updated** automatically after you **promote me**"
         )
         return
-    if not a.can_manage_voice_chats:
+    priv = a.privileges
+    if not (priv and priv.can_manage_video_chats):
         await m.reply_text(
             "missing required permission:" + "\n\n» ❌ __Manage video chat__"
         )
         return
-    if not a.can_delete_messages:
+    if not (priv and priv.can_delete_messages):
         await m.reply_text(
             "missing required permission:" + "\n\n» ❌ __Delete messages__"
         )
         return
-    if not a.can_invite_users:
+    if not (priv and priv.can_invite_users):
         await m.reply_text("missing required permission:" + "\n\n» ❌ __Add users__")
         return
     try:
         ubot = (await user.get_me()).id
         b = await c.get_chat_member(chat_id, ubot)
-        if b.status == "kicked":
+        if b.status == ChatMemberStatus.BANNED:
             await m.reply_text(
                 f"@{ASSISTANT_NAME} **is banned in group** {m.chat.title}\n\n» **unban the userbot first if you want to use this bot.**"
             )
@@ -510,23 +473,9 @@ async def vstream(c: Client, m: Message):
                     reply_markup=keyboard,
                 )
             else:
-                if Q == 720:
-                    amaze = HighQualityVideo()
-                elif Q == 480:
-                    amaze = MediumQualityVideo()
-                elif Q == 360:
-                    amaze = LowQualityVideo()
                 try:
                     await loser.edit("🔄 **Joining vc...**")
-                    await call_py.join_group_call(
-                        chat_id,
-                        AudioVideoPiped(
-                            livelink,
-                            HighQualityAudio(),
-                            amaze,
-                        ),
-                        stream_type=StreamType().live_stream,
-                    )
+                    await call_py.play(chat_id, media_video(livelink, Q))
                     add_to_queue(chat_id, "Live Stream", livelink, link, "Video", Q)
                     await loser.delete()
                     requester = (

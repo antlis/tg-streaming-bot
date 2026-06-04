@@ -5,6 +5,7 @@ from pyrogram import Client, filters
 from config import BOT_USERNAME, SUDO_USERS
 from driver.filters import command, other_filters
 from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
+from pyrogram.types import ChatPrivileges
 from driver.decorators import authorized_users_only, sudo_users_only
 
 
@@ -30,14 +31,16 @@ async def join_chat(c: Client, m: Message):
     # optional: promote it (needed only for /volume). The bot may not be able to
     # resolve the assistant peer yet (PeerIdInvalid) — that's fine, skip quietly.
     try:
-        await m.chat.promote_member(ubot_id, can_manage_voice_chats=True)
-    except (PeerIdInvalid, Exception):
+        await m.chat.promote_member(
+            ubot_id, privileges=ChatPrivileges(can_manage_video_chats=True)
+        )
+    except Exception:
         pass
     return await user.send_message(chat_id, "✅ userbot is in the chat")
 
 
 @Client.on_message(command(["userbotleave",
-                            f"leave@{BOT_USERNAME}"]) & filters.group & ~filters.edited
+                            f"leave@{BOT_USERNAME}"]) & filters.group
 )
 @authorized_users_only
 async def leave_chat(_, m: Message):
@@ -64,7 +67,7 @@ async def leave_all(client, message):
     left = 0
     failed = 0
     lol = await message.reply("🔄 **userbot** leaving all chats !")
-    async for dialog in user.iter_dialogs():
+    async for dialog in user.get_dialogs():
         try:
             await user.leave_chat(dialog.chat.id)
             left += 1
