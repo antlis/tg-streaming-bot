@@ -1,11 +1,10 @@
 import asyncio
 import logging
 
-# Keep WARNING/ERROR for the noisy libs, but INFO for the call engine so
-# connection-state changes (the reason a stream dies) reach the logs.
+# Keep WARNING/ERROR (real problems still surface); the concise [CALL] state
+# prints in driver/utils.py cover call lifecycle without the INFO spam.
 logging.basicConfig(level=logging.WARNING)
-logging.getLogger("pytgcalls").setLevel(logging.INFO)
-logging.getLogger("ntgcalls").setLevel(logging.INFO)
+logging.getLogger("pytgcalls").setLevel(logging.WARNING)
 
 from pytgcalls import idle
 from pyrogram.types import BotCommand
