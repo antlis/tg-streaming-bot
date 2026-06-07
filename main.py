@@ -10,6 +10,7 @@ from pytgcalls import idle
 from pyrogram.types import BotCommand
 from pyrogram.errors import FloodWait
 from driver.clients import call_py, bot
+from program.resume import track_position
 
 BOT_COMMANDS = [
     BotCommand("play", "play music from YouTube, or reply to an audio"),
@@ -17,6 +18,7 @@ BOT_COMMANDS = [
     BotCommand("vstream", "stream a live / m3u8 / YouTube link"),
     BotCommand("pause", "pause playback (admin)"),
     BotCommand("resume", "resume playback (admin)"),
+    BotCommand("continue", "resume the last track from where it stopped"),
     BotCommand("skip", "skip to the next track (admin)"),
     BotCommand("stop", "stop and leave the voice chat (admin)"),
     BotCommand("vmute", "mute the assistant in the voice chat"),
@@ -62,6 +64,7 @@ async def start_bot():
     except Exception as e:
         print(f"[WARN]: could not register bot commands: {e}")
     asyncio.ensure_future(heartbeat())
+    asyncio.ensure_future(track_position())
     print("[INFO]: STARTING PYTGCALLS CLIENT")
     await call_py.start()
     await idle()

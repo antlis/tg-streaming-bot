@@ -1,0 +1,23 @@
+{
+  "log": { "level": "info", "timestamp": true },
+  "dns": {
+    "servers": [ { "tag": "remote", "type": "udp", "server": "8.8.8.8", "detour": "reality" } ],
+    "final": "remote",
+    "strategy": "ipv4_only"
+  },
+  "inbounds": [
+    { "type": "tun", "tag": "tun-in", "address": [ "172.19.0.1/30" ], "auto_route": true, "strict_route": false, "stack": "gvisor" }
+  ],
+  "outbounds": [
+    { "type": "vless", "tag": "reality", "server": "YOUR_SERVER_IP", "server_port": 443,
+      "uuid": "YOUR_UUID", "flow": "xtls-rprx-vision",
+      "tls": { "enabled": true, "server_name": "www.microsoft.com",
+        "utls": { "enabled": true, "fingerprint": "chrome" },
+        "reality": { "enabled": true, "public_key": "YOUR_REALITY_PUBLIC_KEY", "short_id": "YOUR_SHORT_ID" } } },
+    { "type": "direct", "tag": "direct" }
+  ],
+  "route": {
+    "auto_detect_interface": true, "final": "reality",
+    "rules": [ { "action": "sniff" }, { "protocol": "dns", "action": "hijack-dns" } ]
+  }
+}

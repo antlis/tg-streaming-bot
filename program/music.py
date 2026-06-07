@@ -12,7 +12,7 @@ from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue
 from driver.clients import call_py, user
-from driver.utils import bash, make_progress, control_panel, media_audio
+from driver.utils import bash, make_progress, control_panel, media_audio, drop_stale_queue
 from pyrogram import Client
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
@@ -179,6 +179,8 @@ async def play(c: Client, m: Message):
                 return await m.reply_text(
                     f"❌ **userbot failed to join**\n\n**reason**: `{e}`"
                 )
+    # if a previous stream died silently, clear the stale queue so we rejoin
+    await drop_stale_queue(chat_id)
     if replied:
         # audio sent as a generic file/document (e.g. a bare .mp3) counts too
         audio_doc = (

@@ -1,6 +1,6 @@
 
 
-from driver.queues import QUEUE
+from driver.queues import QUEUE, RESUME
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from config import (
@@ -192,6 +192,11 @@ async def cbmenu(_, query: CallbackQuery):
                   ]
              ),
          )
+    elif chat_id in RESUME:
+        await query.edit_message_text(
+            "⏮ **Resume the last track** from where it stopped?",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⏮ Resume", callback_data="cbrestore")], [InlineKeyboardButton("🗑 Close", callback_data="cls")]]),
+        )
     else:
         await query.answer("❌ nothing is currently streaming", show_alert=True)
 

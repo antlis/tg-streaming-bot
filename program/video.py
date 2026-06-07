@@ -10,7 +10,7 @@ from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue
 from driver.clients import call_py, user
-from driver.utils import make_progress, control_panel, media_video
+from driver.utils import make_progress, control_panel, media_video, drop_stale_queue
 from pyrogram import Client
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
@@ -188,6 +188,8 @@ async def vplay(c: Client, m: Message):
                     f"❌ **userbot failed to join**\n\n**reason**: `{e}`"
                 )
 
+    # if a previous stream died silently, clear the stale queue so we rejoin
+    await drop_stale_queue(chat_id)
     if replied:
         if replied.video or replied.document:
             media = replied.video or replied.document
@@ -430,6 +432,8 @@ async def vstream(c: Client, m: Message):
                     f"❌ **userbot failed to join**\n\n**reason**: `{e}`"
                 )
 
+    # if a previous stream died silently, clear the stale queue so we rejoin
+    await drop_stale_queue(chat_id)
     if len(m.command) < 2:
         await m.reply("» give me a live-link/m3u8 url/youtube link to stream.")
     else:

@@ -81,6 +81,41 @@ Two Telegram identities are required:
 - YouTube playback **downloads first, then streams** (yt-dlp with the `android_vr` client; H.264+AAC mp4) — direct stream URLs are blocked by YouTube these days. Expect a short delay before playback starts.
 - Large Telegram files also download fully before streaming — a progress bar is shown; big files just take a while.
 
+## Running where Telegram is filtered (Reality VPN sidecar)
+
+Where Telegram — especially the voice servers — is blocked or throttled, a SOCKS
+proxy isn't enough: it carries only the **signaling**, not the **voice UDP** that
+py-tgcalls streams on. So `docker-compose.yml` ships an optional **`reality-vpn`
+sidecar**: a [sing-box](https://sing-box.sagernet.org) container that raises a TUN
+and tunnels **all** of the bot's traffic (signaling **and** voice) through a
+[VLESS + Reality](https://github.com/XTLS/REALITY) server. The `bot` joins the
+sidecar's network namespace (`network_mode: "service:reality-vpn"`), so everything
+it does exits via your VPN — no per-client proxy config needed, and it doesn't
+affect anything else on the host.
+
+1. Copy the template and fill in your Reality server:
+   ```sh
+   cp reality-vpn.json.example reality-vpn.json
+   ```
+   Set `server` / `server_port` / `uuid` / `public_key` / `short_id` / `server_name`
+   (the borrowed SNI) — straight from your server's Xray/sing-box Reality config or
+   its `vless://…` share link.
+2. Start everything — the bot waits until the VPN is healthy, then routes through it:
+   ```sh
+   docker compose up -d
+   ```
+   Verify the exit is your server, not your real IP:
+   ```sh
+   docker compose exec bot wget -qO- https://api.ipify.org
+   ```
+
+**Notes**
+- The bot shares the sidecar's netns, so to switch servers edit `reality-vpn.json`
+  then `docker compose up -d --force-recreate` (recreates both).
+- Don't need a full tunnel? Skip the sidecar entirely and set the `PROXY_*` env
+  vars instead — but note voice will then go direct.
+- `reality-vpn.json` is gitignored (live credentials); only `.example` is committed.
+
 ## Roadmap / TODO
 
 ### High impact

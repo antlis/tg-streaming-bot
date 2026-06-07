@@ -33,6 +33,23 @@ def media_video(path, quality=720):
     )
 
 
+async def drop_stale_queue(chat_id) -> bool:
+    """If we think a chat is queued but py-tgcalls has no live call for it
+    (e.g. the stream silently died without firing a lifecycle event), clear the
+    stale queue so the next /play rejoins instead of queuing into a dead call."""
+    if chat_id not in QUEUE:
+        return False
+    try:
+        live = chat_id in (await call_py.calls)
+    except Exception:
+        live = False
+    if not live:
+        print(f"[CALL]: {chat_id} queued but no live call — clearing stale queue")
+        clear_queue(chat_id)
+        return True
+    return False
+
+
 def can_manage_vc(member) -> bool:
     """Pyrogram 2.x: owners implicitly have every right; admins need the
     can_manage_video_chats privilege."""

@@ -1,4 +1,5 @@
 QUEUE = {}
+RESUME = {}  # last track + playback position per chat (for /continue)
 
 def add_to_queue(chat_id, songname, link, ref, type, quality):
    if chat_id in QUEUE:
