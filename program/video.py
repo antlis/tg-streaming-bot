@@ -10,6 +10,7 @@ from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue
 from driver.clients import call_py, user
+from driver.transcode import prepare_for_stream
 from driver.utils import make_progress, control_panel, media_video, drop_stale_queue
 from pyrogram import Client
 from pyrogram.enums import ChatMemberStatus
@@ -201,6 +202,12 @@ async def vplay(c: Client, m: Message):
                 loser = await replied.reply("📦 **already downloaded — starting...**")
                 dl = cached
             else:
+                if media.file_size and media.file_size > 2 * 1024 ** 3:
+                    await replied.reply(
+                        f"⚠️ This file is **{media.file_size / 1024 ** 3:.1f} GB**. Telegram caps "
+                        "downloads at **2 GB** for standard accounts (4 GB for Premium), so it "
+                        "may fail to download. Trying anyway…"
+                    )
                 loser = await replied.reply("📥 **downloading video...**")
                 dl = await replied.download(
                     file_name=cached,
@@ -230,6 +237,7 @@ async def vplay(c: Client, m: Message):
                 )
             else:
                 try:
+                  dl = await prepare_for_stream(dl, loser)
                   await loser.edit("🔄 **Joining vc...**")
                   await call_py.play(chat_id, media_video(dl, Q))
                   if start_muted:

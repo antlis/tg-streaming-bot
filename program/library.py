@@ -5,6 +5,7 @@ from config import BOT_USERNAME, LIBRARY_ROOT, LIBRARY_CATEGORIES
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue
 from driver.clients import call_py
+from driver.transcode import prepare_for_stream
 from driver.utils import (
     control_panel,
     media_video,
@@ -157,8 +158,9 @@ async def lib_play_cb(c: Client, query: CallbackQuery):
         pos = add_to_queue(chat_id, name[:70], path, path, "Video", 720)
         return await query.edit_message_text(f"💡 **Queued #{pos}:** `{name[:60]}`", reply_markup=control_panel)
     try:
-        await call_py.play(chat_id, media_video(path, 720))
-        add_to_queue(chat_id, name[:70], path, path, "Video", 720)
+        streamable = await prepare_for_stream(path, query.message)
+        await call_py.play(chat_id, media_video(streamable, 720))
+        add_to_queue(chat_id, name[:70], streamable, streamable, "Video", 720)
         await query.edit_message_text(f"🎬 **Now playing:** `{name[:60]}`", reply_markup=control_panel)
     except Exception as e:
         await query.edit_message_text(f"🚫 error: `{e}`")
@@ -191,9 +193,11 @@ async def lplay(c: Client, m: Message):
     if chat_id in QUEUE:
         pos = add_to_queue(chat_id, name[:70], path, path, "Video", 720)
         return await m.reply(f"💡 **Queued #{pos}:** `{name[:60]}`", reply_markup=control_panel)
+    status = await m.reply(f"🎬 preparing `{name[:50]}`…")
     try:
-        await call_py.play(chat_id, media_video(path, 720))
-        add_to_queue(chat_id, name[:70], path, path, "Video", 720)
-        await m.reply(f"🎬 **Now playing:** `{name[:60]}`", reply_markup=control_panel)
+        streamable = await prepare_for_stream(path, status)
+        await call_py.play(chat_id, media_video(streamable, 720))
+        add_to_queue(chat_id, name[:70], streamable, streamable, "Video", 720)
+        await status.edit(f"🎬 **Now playing:** `{name[:60]}`", reply_markup=control_panel)
     except Exception as e:
-        await m.reply(f"🚫 error: `{e}`")
+        await status.edit(f"🚫 error: `{e}`")
