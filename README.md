@@ -1,4 +1,4 @@
-# Telegram Music & Video Stream Bot
+# tg-streaming-bot
 
 Telegram bot that streams **music & video into group voice chats**, built with [Pyrogram](https://docs.pyrogram.org) and [py-tgcalls](https://github.com/pytgcalls/pytgcalls).
 
@@ -18,12 +18,17 @@ Two Telegram identities are required:
 - **An assistant user account** — logs in via a Pyrogram session string (`SESSION_NAME`) and is what actually joins the voice chat and streams. It must be a **member of every group** it plays in (play commands auto-join it), and should be a **dedicated account**: Telegram allows only one voice-chat connection per account, so don't use an account a human listens with.
 
 ## Setup
-1. Copy the template and fill it in:
+1. Clone and enter the repo:
+   ```sh
+   git clone https://github.com/antlis/tg-streaming-bot.git
+   cd tg-streaming-bot
+   ```
+2. Copy the template and fill it in:
    ```sh
    cp example.env .env
    ```
    See the table below — only the **Required** block is mandatory.
-2. Generate the assistant session string (logs in with Pyrogram 2.x and converts
+3. Generate the assistant session string (logs in with Pyrogram 2.x and converts
    to the 1.x format the bot uses — Telegram blocks logins from old clients):
    ```sh
    docker run -it --rm --env-file .env \
@@ -31,7 +36,7 @@ Two Telegram identities are required:
      sh -c "pip install -q pyrogram==2.0.106 tgcrypto && python3 /gen.py"
    ```
    Log in with the **assistant** account, then paste the printed string into `SESSION_NAME` in `.env`.
-3. Build & run (compose is the easy way — includes the cache volume and a healthcheck):
+4. Build & run (compose is the easy way — includes the cache volume and a healthcheck):
    ```sh
    docker compose up -d --build
    ```
@@ -42,7 +47,7 @@ Two Telegram identities are required:
      -v musicbot_downloads:/app/downloads \
      --restart unless-stopped musicbot
    ```
-4. In the group: add the bot (as admin), start a voice chat, then `/play <song>`.
+5. In the group: add the bot (as admin), start a voice chat, then `/play <song>`.
 
 ## Configuration (`.env`)
 | Key | Required | Purpose |
