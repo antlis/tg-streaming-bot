@@ -137,3 +137,133 @@ async def _run_ffmpeg(input_pre, path, vargs, aargs, tmp, duration, status_msg, 
     await proc.wait()
     await drain
     return proc.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 1024
+
+
+async def _run_cmd(args, tmp, duration, status_msg, label):
+    """Run an arbitrary ffmpeg arg list (output options + input), with progress."""
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-y", "-nostdin", *args,
+        "-movflags", "+faststart", "-progress", "pipe:1", "-nostats", tmp,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+
+    async def _drain():
+        while True:
+            if not await proc.stderr.readline():
+                break
+
+    drain = asyncio.ensure_future(_drain())
+    last = 0.0
+    while True:
+        raw = await proc.stdout.readline()
+        if not raw:
+            break
+        line = raw.decode(errors="ignore").strip()
+        if line.startswith("out_time_ms=") and status_msg is not None and duration:
+            now = time()
+            if now - last >= 3:
+                last = now
+                try:
+                    secs = int(line.split("=", 1)[1]) / 1_000_000
+                except ValueError:
+                    secs = 0
+                pct = max(0, min(100, int(secs / duration * 100)))
+                bar = "█" * (pct // 10) + "░" * (10 - pct // 10)
+                try:
+                    await status_msg.edit(f"**{label} (→ mp4)…**\n`{bar}` {pct}%")
+                except Exception:
+                    pass
+    await proc.wait()
+    await drain
+    return proc.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 1024
+
+
+_IMAGE_SUBS = ("hdmv_pgs_subtitle", "dvd_subtitle", "dvdsub", "dvb_subtitle", "dvbsub", "xsub")
+
+
+async def probe_tracks(path):
+    """List selectable audio + subtitle tracks of a file.
+    Returns (audios, subs):
+      audios = [(abs_index, label)]
+      subs   = [(abs_index, sub_ordinal, label, is_image)]"""
+    audios, subs = [], []
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "error", "-print_format", "json", "-show_streams", path,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        out, _ = await proc.communicate()
+        streams = json.loads(out.decode(errors="ignore") or "{}").get("streams", [])
+    except Exception:
+        return audios, subs
+    s_ord = 0
+    for s in streams:
+        tags = s.get("tags", {}) or {}
+        if s.get("codec_type") == "audio":
+            label = tags.get("language") or tags.get("title") or f"audio {len(audios) + 1}"
+            audios.append((s["index"], label))
+        elif s.get("codec_type") == "subtitle":
+            label = tags.get("language") or tags.get("title") or f"sub {s_ord + 1}"
+            subs.append((s["index"], s_ord, label, s.get("codec_name") in _IMAGE_SUBS))
+            s_ord += 1
+    return audios, subs
+
+
+async def transcode_selection(src, audio_abs, sub_abs=None, sub_ord=0, sub_image=False, status_msg=None):
+    """Transcode `src` to a cached H.264/AAC mp4 with a chosen audio track mapped
+    and (optionally) a chosen subtitle burned in. Returns the path, or `src` on
+    failure. Cached per (src, audio, sub)."""
+    info = await _ffprobe(src)
+    vcodec = info[0] if info else None
+    duration = info[2] if info else 0
+    try:
+        st = os.stat(src)
+        key = hashlib.md5(f"{src}:{st.st_mtime_ns}:{audio_abs}:{sub_abs}".encode()).hexdigest()[:16]
+    except OSError:
+        return src
+    out = os.path.join(CACHE_DIR, f"sel_{key}.mp4")
+    if os.path.exists(out) and os.path.getsize(out) > 1024:
+        try:
+            os.utime(out, None)
+        except OSError:
+            pass
+        return out
+    tmp = out + ".part"
+    a_aac = ["-c:a", "aac", "-b:a", "160k"]
+    common_tail = ["-dn", "-sn", *a_aac]
+
+    # build the preferred command, then a no-subtitle fallback
+    attempts = []
+    if sub_abs is not None and sub_image:
+        attempts.append(["-i", src, "-filter_complex", f"[0:v:0][0:{sub_abs}]overlay,scale=-2:'min(720,ih)'[v]",
+                         "-map", "[v]", "-map", f"0:{audio_abs}", "-c:v", "libx264", "-preset", "veryfast",
+                         "-crf", "23", "-pix_fmt", "yuv420p", *common_tail])
+    elif sub_abs is not None:
+        esc = src.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+        attempts.append(["-i", src, "-map", "0:v:0", "-map", f"0:{audio_abs}",
+                         "-vf", f"subtitles='{esc}':si={sub_ord},scale=-2:'min(720,ih)'",
+                         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", *common_tail])
+    # audio-only fallback (also the no-sub path): GPU if HEVC+enabled, else CPU, else copy
+    if vcodec == "h264":
+        audio_only = ["-i", src, "-map", "0:v:0", "-map", f"0:{audio_abs}", "-c:v", "copy", *common_tail]
+    elif TRANSCODE_HWACCEL == "vaapi":
+        audio_only = ["-vaapi_device", "/dev/dri/renderD128", "-i", src, "-map", "0:v:0", "-map", f"0:{audio_abs}",
+                      "-vf", "format=nv12,hwupload,scale_vaapi=w=-2:h=720", "-c:v", "h264_vaapi", "-qp", "24", *common_tail]
+    else:
+        audio_only = ["-i", src, "-map", "0:v:0", "-map", f"0:{audio_abs}", "-vf", "scale=-2:'min(720,ih)'",
+                      "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", *common_tail]
+    attempts.append(audio_only)
+
+    label = "🔄 Preparing (audio/subs)" if sub_abs is not None else "🔄 Preparing audio"
+    for args in attempts:
+        if await _run_cmd(args, tmp, duration, status_msg, label):
+            try:
+                os.replace(tmp, out)
+                return out
+            except OSError:
+                return tmp
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+    return src
