@@ -1,21 +1,58 @@
+import io
 import os
 import re
 import asyncio
+import hashlib
 import urllib.request
 
+from PIL import Image, ImageDraw, ImageFont
 from config import BOT_USERNAME, RADIO_IMG
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue, clear_queue, get_queue
 from driver.clients import call_py
 from driver.utils import (
     control_panel,
-    media_audio,
     ensure_assistant_in_chat,
     drop_stale_queue,
     can_manage_vc,
 )
+from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+
+
+def _render_card(station):
+    """Render a static placeholder image (station name + LIVE over the radio art)
+    to stream as the voice-chat video feed. Cached per station."""
+    key = hashlib.md5(station.encode()).hexdigest()[:10]
+    out = os.path.join("downloads", f"rcard_{key}.png")
+    if os.path.exists(out):
+        return out
+    W, H = 1280, 720
+    try:
+        if str(RADIO_IMG).startswith("http"):
+            data = urllib.request.urlopen(RADIO_IMG, timeout=12).read()
+            bg = Image.open(io.BytesIO(data)).convert("RGB")
+        else:
+            bg = Image.open(RADIO_IMG).convert("RGB")
+        bg = bg.resize((W, H))
+        bg = Image.blend(bg, Image.new("RGB", (W, H), (0, 0, 0)), 0.5)  # darken for legibility
+    except Exception:
+        bg = Image.new("RGB", (W, H), (18, 18, 28))
+    draw = ImageDraw.Draw(bg)
+    try:
+        f_big = ImageFont.truetype("driver/source/medium.ttf", 66)
+        f_small = ImageFont.truetype("driver/source/regular.ttf", 38)
+    except Exception:
+        f_big = f_small = ImageFont.load_default()
+    name = station if len(station) <= 38 else station[:37] + "…"
+    draw.text((64, 300), name, fill=(255, 255, 255), font=f_big)
+    draw.text((64, 392), "RADIO  •  LIVE", fill=(255, 90, 90), font=f_small)
+    try:
+        bg.save(out)
+        return out
+    except Exception:
+        return None
 
 # Active now-playing cards: chat_id -> {"msg", "stream", "name", "last"}
 RADIO = {}
@@ -196,9 +233,17 @@ async def radio_tune(c: Client, query: CallbackQuery):
     await query.answer("tuning in…")
     await query.edit_message_text(f"📻 tuning **{name[:60]}**…")
     stream = await _resolve(url)
+    card_img = await asyncio.to_thread(_render_card, name)
     try:
         await drop_stale_queue(chat_id)
-        await call_py.play(chat_id, media_audio(stream))
+        if card_img:
+            # stream the still placeholder as the VC video + radio as audio
+            await call_py.play(chat_id, MediaStream(
+                card_img, audio_path=stream,
+                video_parameters=VideoQuality.SD_480p, audio_parameters=AudioQuality.HIGH,
+            ))
+        else:
+            await call_py.play(chat_id, MediaStream(stream, video_flags=MediaStream.Flags.IGNORE))
         clear_queue(chat_id)  # radio takes over — it's a single live stream
         add_to_queue(chat_id, name[:70], stream, url, "Audio", 0)
     except Exception as e:
@@ -209,7 +254,7 @@ async def radio_tune(c: Client, query: CallbackQuery):
         await query.message.delete()
     except Exception:
         pass
-    card = await c.send_photo(chat_id, RADIO_IMG, caption=_caption(name, track), reply_markup=control_panel)
+    card = await c.send_photo(chat_id, card_img or RADIO_IMG, caption=_caption(name, track), reply_markup=control_panel)
     RADIO[chat_id] = {"msg": card, "stream": stream, "name": name, "last": _caption(name, track)}
 
 
