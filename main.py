@@ -33,6 +33,7 @@ BOT_COMMANDS = [
     BotCommand("vmute", "mute the assistant in the voice chat"),
     BotCommand("vunmute", "unmute the assistant in the voice chat"),
     BotCommand("playlist", "show the current queue"),
+    BotCommand("info", "now playing + controls"),
     BotCommand("help", "show the command list"),
     BotCommand("song", "download a song from YouTube"),
     BotCommand("video", "download a video from YouTube"),

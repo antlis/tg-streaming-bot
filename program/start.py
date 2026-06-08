@@ -139,7 +139,8 @@ async def help_cmd(client: Client, message: Message):
         "• `/pause` `/resume` `/skip` `/stop`\n"
         "• `/seek 12:30` — jump to a time · `/continue` — resume after a drop\n"
         "• `/vmute` `/vunmute` · `/volume 1-200`\n"
-        "• `/playlist` — show the queue\n\n"
+        "• `/loop` `/shuffle` `/clear`\n"
+        "• `/info` — now playing + controls · `/playlist` — the queue\n\n"
         "**⚙️ Setup / status**\n"
         "• `/userbotjoin` `/userbotleave` · `/reload`\n"
         "• `/ping` `/alive` `/uptime`",

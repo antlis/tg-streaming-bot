@@ -255,7 +255,7 @@ async def radio_tune(c: Client, query: CallbackQuery):
     except Exception:
         pass
     card = await c.send_photo(chat_id, card_img or RADIO_IMG, caption=_caption(name, track), reply_markup=control_panel)
-    RADIO[chat_id] = {"msg": card, "stream": stream, "name": name, "last": _caption(name, track)}
+    RADIO[chat_id] = {"msg": card, "stream": stream, "name": name, "track": track, "last": _caption(name, track)}
 
 
 async def radio_updater():
@@ -270,6 +270,7 @@ async def radio_updater():
                 RADIO.pop(chat_id, None)
                 continue
             track = (await asyncio.to_thread(_icy_metadata, st["stream"])).get("title")
+            st["track"] = track
             cap = _caption(st["name"], track)
             if cap != st.get("last"):
                 st["last"] = cap

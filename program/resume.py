@@ -10,7 +10,7 @@ import asyncio
 
 from config import BOT_USERNAME, IDLE_LEAVE_MINUTES
 from driver.clients import call_py, bot
-from driver.queues import QUEUE, RESUME, get_queue, save_resume, clear_queue
+from driver.queues import QUEUE, RESUME, get_queue, save_resume, clear_queue, is_loop
 from driver.filters import command, other_filters
 from driver.decorators import authorized_users_only
 from driver.utils import can_manage_vc, control_panel
@@ -175,6 +175,42 @@ async def resume_last(chat_id):
     await call_py.play(chat_id, _media(info))
     QUEUE[chat_id] = [[info["name"], info["url"], info["link"], info["type"], info["Q"]]]
     return info
+
+
+@Client.on_message(command(["info", f"info@{BOT_USERNAME}", "np", "nowplaying"]) & other_filters)
+async def info_cmd(c: Client, m):
+    """Now-playing + the control panel, callable any time."""
+    chat_id = m.chat.id
+    q = get_queue(chat_id)
+    if not q:
+        return await m.reply_text("❌ nothing is currently playing.")
+    name, link, typ = q[0][0], q[0][2], q[0][3]
+    try:
+        st = (await call_py.calls).get(chat_id)
+    except Exception:
+        st = None
+    status = "⏸ Paused" if (st and getattr(st, "status", None) == Call.Status.PAUSED) else "▶️ Playing"
+    try:
+        pos = int(await call_py.time(chat_id))
+    except Exception:
+        pos = 0
+
+    title = f"🏷 [{name}]({link})" if str(link).startswith("http") else f"🏷 {name}"
+    lines = [f"🎧 **Now playing** · `{typ}`", title]
+    try:
+        from program.radio import RADIO
+        rinfo = RADIO.get(chat_id)
+    except Exception:
+        rinfo = None
+    if rinfo and rinfo.get("track"):
+        lines.append(f"🎶 `{rinfo['track']}`")
+    meta = ([f"⏱ {_fmt(pos)}"] if pos > 0 else []) + [status]
+    if is_loop(chat_id):
+        meta.append("🔁 loop")
+    lines.append(" · ".join(meta))
+    if len(q) > 1:
+        lines.append(f"📖 {len(q) - 1} more in queue — `/playlist`")
+    await m.reply_text("\n".join(lines), reply_markup=control_panel, disable_web_page_preview=True)
 
 
 @Client.on_message(command(["seek", f"seek@{BOT_USERNAME}"]) & other_filters)
