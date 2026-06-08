@@ -1,5 +1,34 @@
+import os
+import json
+
 QUEUE = {}
 RESUME = {}  # last track + playback position per chat (for /continue)
+
+# RESUME is persisted to the downloads volume so /continue still works after a
+# bot restart/crash. (QUEUE isn't persisted — the voice-chat connection is gone
+# after a restart, so a restored playlist would be meaningless.)
+_RESUME_FILE = os.path.join("downloads", "resume.json")
+
+
+def save_resume():
+    try:
+        os.makedirs("downloads", exist_ok=True)
+        tmp = _RESUME_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(RESUME, f)
+        os.replace(tmp, _RESUME_FILE)
+    except Exception:
+        pass
+
+
+def load_resume():
+    try:
+        with open(_RESUME_FILE) as f:
+            data = json.load(f)
+        RESUME.clear()
+        RESUME.update({int(k): v for k, v in data.items()})
+    except Exception:
+        pass
 
 def add_to_queue(chat_id, songname, link, ref, type, quality):
    if chat_id in QUEUE:

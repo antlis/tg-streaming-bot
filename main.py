@@ -10,6 +10,7 @@ from pytgcalls import idle
 from pyrogram.types import BotCommand
 from pyrogram.errors import FloodWait
 from driver.clients import call_py, bot
+from driver.queues import load_resume
 from program.resume import track_position
 
 BOT_COMMANDS = [
@@ -65,6 +66,7 @@ async def start_bot():
         print("[INFO]: BOT COMMANDS REGISTERED")
     except Exception as e:
         print(f"[WARN]: could not register bot commands: {e}")
+    load_resume()  # restore resume state so /continue survives restarts
     asyncio.ensure_future(heartbeat())
     asyncio.ensure_future(track_position())
     print("[INFO]: STARTING PYTGCALLS CLIENT")

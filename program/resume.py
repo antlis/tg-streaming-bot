@@ -10,7 +10,7 @@ import asyncio
 
 from config import BOT_USERNAME
 from driver.clients import call_py, bot
-from driver.queues import QUEUE, RESUME, get_queue
+from driver.queues import QUEUE, RESUME, get_queue, save_resume
 from driver.filters import command, other_filters
 from driver.utils import can_manage_vc, control_panel
 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, Call
@@ -78,8 +78,12 @@ async def track_position():
     RESUME is separate from QUEUE, so it survives the queue being cleared."""
     seen = {}       # chat_id -> (last_pos, frozen_seconds)
     attempts = {}   # chat_id -> consecutive auto-resume attempts
+    ticks = 0
     while True:
         await asyncio.sleep(5)
+        ticks += 1
+        if ticks % 6 == 0:   # persist resume state every ~30s
+            save_resume()
         try:
             calls = await call_py.calls
         except Exception:
