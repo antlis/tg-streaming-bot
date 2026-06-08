@@ -18,6 +18,7 @@ BOT_COMMANDS = [
     BotCommand("play", "play music from YouTube, or reply to an audio"),
     BotCommand("vplay", "play video from YouTube, or reply to a video"),
     BotCommand("vstream", "stream a live / m3u8 / YouTube link"),
+    BotCommand("search", "search YouTube and pick a result to play"),
     BotCommand("library", "browse the local media library"),
     BotCommand("lplay", "play a local library file by name"),
     BotCommand("radio", "tune in to an internet radio station"),
