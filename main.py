@@ -16,6 +16,8 @@ BOT_COMMANDS = [
     BotCommand("play", "play music from YouTube, or reply to an audio"),
     BotCommand("vplay", "play video from YouTube, or reply to a video"),
     BotCommand("vstream", "stream a live / m3u8 / YouTube link"),
+    BotCommand("library", "browse the local media library"),
+    BotCommand("lplay", "play a local library file by name"),
     BotCommand("pause", "pause playback (admin)"),
     BotCommand("resume", "resume playback (admin)"),
     BotCommand("continue", "resume the last track from where it stopped"),

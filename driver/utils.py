@@ -1,12 +1,13 @@
 import os
 import asyncio
 from time import time
-from config import DOWNLOADS_CACHE_LIMIT_MB
-from driver.clients import bot, call_py
+from config import DOWNLOADS_CACHE_LIMIT_MB, ASSISTANT_NAME
+from driver.clients import bot, call_py, user
 from driver.queues import QUEUE, clear_queue, get_queue, pop_an_item
 from pytgcalls import filters as call_filters
 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, ChatUpdate, StreamEnded
 from pyrogram.enums import ChatMemberStatus
+from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
 from pyrogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -58,6 +59,60 @@ def can_manage_vc(member) -> bool:
     if member.status == ChatMemberStatus.ADMINISTRATOR:
         return bool(member.privileges and member.privileges.can_manage_video_chats)
     return False
+
+
+async def ensure_assistant_in_chat(c, chat_id, chat_username=None):
+    """Make sure the assistant userbot is a member of the chat (auto-join via
+    public username or an exported invite link). Returns (True, None) on success
+    or (False, reason)."""
+    try:
+        ubot = (await user.get_me()).id
+        b = await c.get_chat_member(chat_id, ubot)
+        if b.status == ChatMemberStatus.BANNED:
+            return False, f"@{ASSISTANT_NAME} is banned in this group — unban the assistant first."
+        return True, None
+    except (UserNotParticipant, PeerIdInvalid):
+        try:
+            if chat_username:
+                await user.join_chat(chat_username)
+            else:
+                invitelink = await c.export_chat_invite_link(chat_id)
+                if invitelink.startswith("https://t.me/+"):
+                    invitelink = invitelink.replace("https://t.me/+", "https://t.me/joinchat/")
+                await user.join_chat(invitelink)
+            return True, None
+        except UserAlreadyParticipant:
+            return True, None
+        except Exception as e:
+            return False, f"userbot failed to join: {e}"
+
+
+async def ensure_can_play(c, m) -> bool:
+    """Shared streaming gate: the bot must be an admin with Manage-video-chats /
+    Delete-messages / Add-users, the assistant must be in the group, and any
+    stale queue is cleared. Replies with the reason and returns False if not ready."""
+    chat_id = m.chat.id
+    if m.sender_chat:
+        await m.reply_text("you're an __Anonymous__ Admin !\n\n» revert back to a user account.")
+        return False
+    try:
+        a = await c.get_chat_member(chat_id, (await c.get_me()).id)
+    except Exception as e:
+        await m.reply_text(f"error:\n\n{e}")
+        return False
+    if a.status not in (ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER):
+        await m.reply_text("💡 Make me an **Administrator** with **Manage video chats**, **Delete messages** and **Add users**.")
+        return False
+    p = a.privileges
+    if not (p and p.can_manage_video_chats and p.can_delete_messages and p.can_invite_users):
+        await m.reply_text("missing a required permission: **Manage video chats / Delete messages / Add users**")
+        return False
+    ok, reason = await ensure_assistant_in_chat(c, chat_id, m.chat.username)
+    if not ok:
+        await m.reply_text(f"❌ {reason}")
+        return False
+    await drop_stale_queue(chat_id)
+    return True
 
 
 keyboard = InlineKeyboardMarkup(

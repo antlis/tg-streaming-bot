@@ -7,6 +7,9 @@ services:
     volumes:
       # persists the downloads cache (instant replays of the same Telegram file)
       - downloads:/app/downloads
+      # local media library (read-only). Set LIBRARY_HOST_DIR in .env to your
+      # media folder; defaults to /tmp (empty) so the library feature stays off.
+      - ${LIBRARY_HOST_DIR:-/tmp}:/library:ro
     restart: unless-stopped
     healthcheck:
       # main.py touches /tmp/heartbeat every 30s; unhealthy if it goes stale

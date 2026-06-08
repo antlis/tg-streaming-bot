@@ -30,6 +30,12 @@ DURATION_LIMIT = int(getenv("DURATION_LIMIT", "540000"))
 # Max size of the downloads cache in MB; pruned (oldest first) after each
 # stream ends. 0 = delete everything not queued as soon as a stream ends.
 DOWNLOADS_CACHE_LIMIT_MB = int(getenv("DOWNLOADS_CACHE_LIMIT_MB", "4096"))
+# Local media library root (in-container path; mount your host folder there).
+# Each immediate subfolder becomes a browsable category. Empty = feature off.
+LIBRARY_ROOT = getenv("LIBRARY_ROOT", "")
+# Optional allowlist of top-level category folders to expose (comma-separated).
+# Empty = show every subfolder of LIBRARY_ROOT.
+LIBRARY_CATEGORIES = [c.strip() for c in getenv("LIBRARY_CATEGORIES", "").split(",") if c.strip()]
 UPSTREAM_REPO = getenv("UPSTREAM_REPO", "")
 IMG_1 = getenv("IMG_1", _DEFAULT_IMG)
 IMG_2 = getenv("IMG_2", _DEFAULT_IMG)
