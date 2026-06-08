@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.WARNING)
 logging.getLogger("pytgcalls").setLevel(logging.WARNING)
 
 from pytgcalls import idle
-from pyrogram.types import BotCommand
+from pyrogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats
 from pyrogram.errors import FloodWait
 from driver.clients import call_py, bot
 from driver.queues import load_resume
@@ -25,9 +25,11 @@ BOT_COMMANDS = [
     BotCommand("continue", "resume the last track from where it stopped"),
     BotCommand("skip", "skip to the next track (admin)"),
     BotCommand("stop", "stop and leave the voice chat (admin)"),
+    BotCommand("seek", "jump to a time in the current track, e.g. /seek 12:30"),
     BotCommand("vmute", "mute the assistant in the voice chat"),
     BotCommand("vunmute", "unmute the assistant in the voice chat"),
     BotCommand("playlist", "show the current queue"),
+    BotCommand("help", "show the command list"),
     BotCommand("song", "download a song from YouTube"),
     BotCommand("video", "download a video from YouTube"),
     BotCommand("userbotjoin", "make the assistant join this group"),
@@ -63,7 +65,11 @@ async def start_bot():
             print(f"[WARN]: FloodWait on bot login — sleeping {wait}s")
             await asyncio.sleep(wait)
     try:
+        # set for the default scope plus groups/private explicitly, so the "/"
+        # menu populates reliably in group chats (not just DMs)
         await bot.set_bot_commands(BOT_COMMANDS)
+        await bot.set_bot_commands(BOT_COMMANDS, scope=BotCommandScopeAllGroupChats())
+        await bot.set_bot_commands(BOT_COMMANDS, scope=BotCommandScopeAllPrivateChats())
         print("[INFO]: BOT COMMANDS REGISTERED")
     except Exception as e:
         print(f"[WARN]: could not register bot commands: {e}")

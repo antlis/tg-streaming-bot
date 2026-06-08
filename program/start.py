@@ -124,6 +124,29 @@ async def alive(client: Client, message: Message):
     )
 
 
+@Client.on_message(command(["help", f"help@{BOT_USERNAME}", "commands", "cmds"]))
+async def help_cmd(client: Client, message: Message):
+    await message.reply_text(
+        f"📖 **{BOT_NAME} — commands**\n\n"
+        "**▶️ Play**\n"
+        "• `/play <query|YouTube URL>` — music (or reply to an audio file)\n"
+        "• `/vplay <query|URL> [720|480|360] [mute]` — video (or reply to a video)\n"
+        "• `/vstream <link>` — live / m3u8 / YouTube-live\n"
+        "• `/library` · `/lplay <name>` — local media library\n"
+        "• `/radio` — internet radio stations\n"
+        "• `/song <query>` · `/video <query>` — download instead of stream\n\n"
+        "**🎛 Controls** (admins)\n"
+        "• `/pause` `/resume` `/skip` `/stop`\n"
+        "• `/seek 12:30` — jump to a time · `/continue` — resume after a drop\n"
+        "• `/vmute` `/vunmute` · `/volume 1-200`\n"
+        "• `/playlist` — show the queue\n\n"
+        "**⚙️ Setup / status**\n"
+        "• `/userbotjoin` `/userbotleave` · `/reload`\n"
+        "• `/ping` `/alive` `/uptime`",
+        disable_web_page_preview=True,
+    )
+
+
 @Client.on_message(command(["ping", f"ping@{BOT_USERNAME}"]))
 async def ping_pong(client: Client, message: Message):
     start = time()

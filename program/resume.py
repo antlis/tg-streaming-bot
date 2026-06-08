@@ -12,6 +12,7 @@ from config import BOT_USERNAME
 from driver.clients import call_py, bot
 from driver.queues import QUEUE, RESUME, get_queue, save_resume
 from driver.filters import command, other_filters
+from driver.decorators import authorized_users_only
 from driver.utils import can_manage_vc, control_panel
 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, Call
 from pyrogram import Client, filters
@@ -30,6 +31,21 @@ def _fmt(sec):
     h, r = divmod(sec, 3600)
     m, s = divmod(r, 60)
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _parse_time(s):
+    """Accept seconds ('90'), 'm:ss' or 'h:mm:ss'. Returns seconds or None."""
+    try:
+        parts = [int(p) for p in s.strip().split(":")]
+    except ValueError:
+        return None
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return parts[0] * 60 + parts[1]
+    if len(parts) == 3:
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]
+    return None
 
 
 def _media(info):
@@ -140,6 +156,32 @@ async def resume_last(chat_id):
     await call_py.play(chat_id, _media(info))
     QUEUE[chat_id] = [[info["name"], info["url"], info["link"], info["type"], info["Q"]]]
     return info
+
+
+@Client.on_message(command(["seek", f"seek@{BOT_USERNAME}"]) & other_filters)
+@authorized_users_only
+async def seek_cmd(c: Client, m):
+    chat_id = m.chat.id
+    q = get_queue(chat_id)
+    if not q:
+        return await m.reply_text("❌ nothing is currently playing.")
+    if len(m.command) < 2:
+        return await m.reply_text("» usage: `/seek 90` or `/seek 12:30`")
+    secs = _parse_time(m.text.split(None, 1)[1])
+    if secs is None or secs < 0:
+        return await m.reply_text("» invalid time — use seconds or `mm:ss` / `h:mm:ss`")
+    head = q[0]
+    info = {"name": head[0], "url": head[1], "link": head[2], "type": head[3], "Q": head[4], "pos": secs}
+    try:
+        await call_py.play(chat_id, _media(info))
+        RESUME[chat_id] = info
+        await m.reply_text(
+            f"⏩ **Seeked to** `{_fmt(secs)}` — [{head[0]}]({head[2]})",
+            disable_web_page_preview=True,
+            reply_markup=control_panel,
+        )
+    except Exception as e:
+        await m.reply_text(f"🚫 error: `{e}`")
 
 
 @Client.on_message(command(["continue", "resumelast", f"continue@{BOT_USERNAME}"]) & other_filters)
