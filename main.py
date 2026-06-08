@@ -19,6 +19,7 @@ BOT_COMMANDS = [
     BotCommand("vstream", "stream a live / m3u8 / YouTube link"),
     BotCommand("library", "browse the local media library"),
     BotCommand("lplay", "play a local library file by name"),
+    BotCommand("radio", "tune in to an internet radio station"),
     BotCommand("pause", "pause playback (admin)"),
     BotCommand("resume", "resume playback (admin)"),
     BotCommand("continue", "resume the last track from where it stopped"),
