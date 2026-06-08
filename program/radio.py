@@ -1,6 +1,7 @@
 import io
 import os
 import re
+import time
 import asyncio
 import hashlib
 import urllib.request
@@ -207,49 +208,140 @@ async def radio(c: Client, m: Message):
     await m.reply("📻 **Radio** — pick a station:", reply_markup=_kb(0))
 
 
+# Active recordings: chat_id -> {proc, out, name, url, tracks, stop(Event), status, start}
+RECORDING = {}
+RECORD_MAX = 3600  # hard cap (1 hour)
+
+
+def _dur(sec):
+    sec = int(sec)
+    h, r = divmod(sec, 3600)
+    m, s = divmod(r, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _rec_caption(name, tracks, secs):
+    cap = f"🎙 **{name[:60]}** · {_dur(secs)}"
+    if tracks:
+        cap += "\n\n**Tracklist:**\n" + "\n".join(f"{i + 1}. {t}" for i, t in enumerate(tracks))
+    return cap[:1024]
+
+
+_rec_kb = InlineKeyboardMarkup([[InlineKeyboardButton("⏹ Stop & send", callback_data="recstop")]])
+
+
 @Client.on_message(command(["record", f"record@{BOT_USERNAME}", "rec"]) & other_filters)
 @authorized_users_only
 async def record_cmd(c: Client, m: Message):
     chat_id = m.chat.id
+    if chat_id in RECORDING:
+        return await m.reply("🔴 already recording — tap **⏹ Stop & send** (or /stoprec).")
     q = get_queue(chat_id)
     if not q:
         return await m.reply("❌ nothing is playing to record.")
     name, url, typ = q[0][0], q[0][1], q[0][3]
     if typ == "Video":
         return await m.reply("🎙 recording is for music / radio (audio) only.")
-    secs = 30
+    secs = RECORD_MAX
     if len(m.command) > 1:
         try:
-            secs = max(1, min(300, int(m.command[1])))
+            secs = max(1, min(RECORD_MAX, int(m.command[1])))
         except ValueError:
             pass
     out = os.path.join("downloads", f"rec_{chat_id}.ogg")
     pre = []
-    if not str(url).startswith("http"):  # local file: capture from the current spot
+    if not str(url).startswith("http"):
         try:
             pre = ["-ss", str(int(await call_py.time(chat_id)))]
         except Exception:
             pre = []
-    status = await m.reply(f"🔴 **Recording {secs}s…**")
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y", "-nostdin", *pre, "-i", url, "-t", str(secs),
-            "-vn", "-ac", "1", "-c:a", "libopus", "-b:a", "64k", out,
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-        )
-        await proc.wait()
-        if proc.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 0:
-            await c.send_voice(chat_id, out, caption=f"🎙 {name[:60]} · {secs}s")
-            await status.delete()
-        else:
-            await status.edit("🚫 recording failed.")
-    except Exception as e:
-        await status.edit(f"🚫 error: `{e}`")
-    finally:
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-y", "-nostdin", *pre, "-i", url, "-t", str(secs),
+        "-vn", "-ac", "1", "-c:a", "libopus", "-b:a", "64k", out,
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+    )
+    track0 = (await asyncio.to_thread(_icy_metadata, url)).get("title") if str(url).startswith("http") else None
+    status = await m.reply(
+        f"🔴 **Recording** `{name[:50]}`…\nTap **⏹ Stop & send** when done (auto-stops at {_dur(secs)}).",
+        reply_markup=_rec_kb,
+    )
+    RECORDING[chat_id] = {
+        "proc": proc, "out": out, "name": name, "url": url,
+        "tracks": [track0] if track0 else [], "stop": asyncio.Event(),
+        "status": status, "start": time.time(),
+    }
+    asyncio.ensure_future(_record_watch(c, chat_id))
+
+
+async def _record_watch(c: Client, chat_id):
+    rec = RECORDING.get(chat_id)
+    if not rec:
+        return
+    proc, url = rec["proc"], rec["url"]
+    while True:
+        if str(url).startswith("http"):
+            t = (await asyncio.to_thread(_icy_metadata, url)).get("title")
+            if t and t not in rec["tracks"]:
+                rec["tracks"].append(t)
         try:
-            os.remove(out)
-        except OSError:
+            await asyncio.wait_for(rec["stop"].wait(), timeout=15)
+        except asyncio.TimeoutError:
             pass
+        if rec["stop"].is_set() or proc.returncode is not None:
+            break
+    if RECORDING.pop(chat_id, None) is None:   # someone else finalized
+        return
+    if proc.returncode is None:
+        try:
+            proc.terminate()
+            await asyncio.wait_for(proc.wait(), 10)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+    try:
+        await rec["status"].delete()
+    except Exception:
+        pass
+    out = rec["out"]
+    if not (os.path.exists(out) and os.path.getsize(out) > 0):
+        return await c.send_message(chat_id, "🚫 recording failed.")
+    cap = _rec_caption(rec["name"], rec["tracks"], time.time() - rec["start"])
+    try:
+        await c.send_voice(chat_id, out, caption=cap)
+    except Exception:
+        try:
+            await c.send_audio(chat_id, out, caption=cap, title=rec["name"][:60])
+        except Exception as e:
+            await c.send_message(chat_id, f"🚫 couldn't send the recording: `{e}`")
+    try:
+        os.remove(out)
+    except OSError:
+        pass
+
+
+@Client.on_callback_query(filters.regex(r"^recstop$"))
+async def recstop_cb(c: Client, query: CallbackQuery):
+    chat_id = query.message.chat.id
+    rec = RECORDING.get(chat_id)
+    if not rec:
+        return await query.answer("not recording", show_alert=True)
+    member = await c.get_chat_member(chat_id, query.from_user.id)
+    if not can_manage_vc(member):
+        return await query.answer("💡 admins (manage video chats) only", show_alert=True)
+    rec["stop"].set()
+    await query.answer("⏹ stopping & sending…")
+
+
+@Client.on_message(command(["stoprec", f"stoprec@{BOT_USERNAME}"]) & other_filters)
+@authorized_users_only
+async def stoprec_cmd(c: Client, m: Message):
+    rec = RECORDING.get(m.chat.id)
+    if not rec:
+        return await m.reply("❌ not recording.")
+    rec["stop"].set()
+    await m.reply("⏹ stopping & sending…")
 
 
 @Client.on_callback_query(filters.regex(r"^rdnoop$"))
