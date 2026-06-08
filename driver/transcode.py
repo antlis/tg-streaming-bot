@@ -4,6 +4,8 @@ import asyncio
 import hashlib
 from time import time
 
+from config import TRANSCODE_HWACCEL
+
 # Telegram streaming core (ntgcalls) reliably handles H.264 video + AAC audio in
 # an mp4 container. Other combos (notably HEVC/H.265, or Opus/AC3 in MKV) often
 # fail to play. prepare_for_stream() converts those to a cached mp4 first.
@@ -64,14 +66,44 @@ async def prepare_for_stream(path, status_msg=None):
         return out
 
     remux = vcodec in GOOD_VCODEC
-    vargs = ["-c:v", "copy"] if remux else [
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-        "-vf", "scale=-2:'min(720,ih)'", "-pix_fmt", "yuv420p",
-    ]
     aargs = ["-c:a", "copy"] if acodec in GOOD_ACODEC else ["-c:a", "aac", "-b:a", "128k"]
     tmp = out + ".part"
+    label = "📦 Repackaging" if remux else "🔄 Transcoding"
+
+    # Build the list of ffmpeg attempts: remux (copy) needs no encoder; for a
+    # real re-encode, try GPU (VAAPI) first when enabled, then fall back to CPU.
+    if remux:
+        attempts = [([], ["-c:v", "copy"])]
+    else:
+        attempts = []
+        if TRANSCODE_HWACCEL == "vaapi":
+            attempts.append((
+                ["-vaapi_device", "/dev/dri/renderD128"],
+                ["-vf", "format=nv12,hwupload,scale_vaapi=w=-2:h=720", "-c:v", "h264_vaapi", "-qp", "24"],
+            ))
+        attempts.append((
+            [],
+            ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+             "-vf", "scale=-2:'min(720,ih)'", "-pix_fmt", "yuv420p"],
+        ))
+
+    for input_pre, vargs in attempts:
+        if await _run_ffmpeg(input_pre, path, vargs, aargs, tmp, duration, status_msg, label):
+            try:
+                os.replace(tmp, out)
+                return out
+            except OSError:
+                return tmp
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+    return path  # all conversions failed — let the core try the original
+
+
+async def _run_ffmpeg(input_pre, path, vargs, aargs, tmp, duration, status_msg, label):
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-y", "-i", path, *vargs, *aargs,
+        "ffmpeg", "-y", "-nostdin", *input_pre, "-i", path, *vargs, *aargs,
         "-movflags", "+faststart", "-progress", "pipe:1", "-nostats", tmp,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
@@ -82,7 +114,6 @@ async def prepare_for_stream(path, status_msg=None):
                 break
 
     drain = asyncio.ensure_future(_drain())
-    label = "📦 Repackaging" if remux else "🔄 Transcoding"
     last = 0.0
     while True:
         raw = await proc.stdout.readline()
@@ -105,14 +136,4 @@ async def prepare_for_stream(path, status_msg=None):
                     pass
     await proc.wait()
     await drain
-    if proc.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 1024:
-        try:
-            os.replace(tmp, out)
-            return out
-        except OSError:
-            return tmp
-    try:
-        os.remove(tmp)
-    except OSError:
-        pass
-    return path  # conversion failed — let the core try the original
+    return proc.returncode == 0 and os.path.exists(tmp) and os.path.getsize(tmp) > 1024

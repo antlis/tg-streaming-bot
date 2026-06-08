@@ -1,0 +1,9 @@
+# GPU hardware-transcoding override (auto-merged by `docker compose`).
+# Only useful on a host with an Intel/AMD VA-API render node. Pair with
+# TRANSCODE_HWACCEL=vaapi in .env. Delete this file on GPU-less hosts.
+services:
+  bot:
+    environment:
+      LIBVA_DRIVER_NAME: "iHD"   # Intel Gen8+; use "i965" for older, "radeonsi" for AMD
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128

@@ -36,6 +36,9 @@ LIBRARY_ROOT = getenv("LIBRARY_ROOT", "")
 # Optional allowlist of top-level category folders to expose (comma-separated).
 # Empty = show every subfolder of LIBRARY_ROOT.
 LIBRARY_CATEGORIES = [c.strip() for c in getenv("LIBRARY_CATEGORIES", "").split(",") if c.strip()]
+# Hardware-accelerated transcoding. "" = CPU (libx264). "vaapi" = Intel/AMD GPU
+# H.264 encode via /dev/dri (needs the device mounted + VA drivers in the image).
+TRANSCODE_HWACCEL = getenv("TRANSCODE_HWACCEL", "").strip().lower()
 UPSTREAM_REPO = getenv("UPSTREAM_REPO", "")
 IMG_1 = getenv("IMG_1", _DEFAULT_IMG)
 IMG_2 = getenv("IMG_2", _DEFAULT_IMG)

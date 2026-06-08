@@ -14,3 +14,4 @@ local.env
 *.raw
 *.log
 reality-vpn.json
+docker-compose.override.yml
