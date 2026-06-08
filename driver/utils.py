@@ -3,7 +3,7 @@ import asyncio
 from time import time
 from config import DOWNLOADS_CACHE_LIMIT_MB, ASSISTANT_NAME
 from driver.clients import bot, call_py, user
-from driver.queues import QUEUE, clear_queue, get_queue, pop_an_item
+from driver.queues import QUEUE, clear_queue, get_queue, pop_an_item, is_loop
 from pytgcalls import filters as call_filters
 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, ChatUpdate, StreamEnded
 from pyrogram.enums import ChatMemberStatus
@@ -277,6 +277,18 @@ async def chat_update_handler(_, update):
 @call_py.on_update(call_filters.stream_end(StreamEnded.Type.AUDIO))
 async def stream_end_handler(_, update):
     chat_id = update.chat_id
+    # loop mode: replay the current track instead of advancing
+    if is_loop(chat_id):
+        q = get_queue(chat_id)
+        if q:
+            head = q[0]
+            try:
+                stream = media_video(head[1], head[4]) if head[3] == "Video" else media_audio(head[1])
+                await call_py.play(chat_id, stream)
+                print(f"[CALL]: stream ended in {chat_id} — looping current track")
+                return
+            except Exception:
+                pass
     print(f"[CALL]: stream ended in {chat_id} — advancing queue")
     op = await skip_current_song(chat_id)
     if op == 1:

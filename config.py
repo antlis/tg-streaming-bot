@@ -30,6 +30,8 @@ DURATION_LIMIT = int(getenv("DURATION_LIMIT", "540000"))
 # Max size of the downloads cache in MB; pruned (oldest first) after each
 # stream ends. 0 = delete everything not queued as soon as a stream ends.
 DOWNLOADS_CACHE_LIMIT_MB = int(getenv("DOWNLOADS_CACHE_LIMIT_MB", "4096"))
+# Leave the voice chat after this many minutes with no human listeners. 0 = off.
+IDLE_LEAVE_MINUTES = int(getenv("IDLE_LEAVE_MINUTES", "10"))
 # Local media library root (in-container path; mount your host folder there).
 # Each immediate subfolder becomes a browsable category. Empty = feature off.
 LIBRARY_ROOT = getenv("LIBRARY_ROOT", "")

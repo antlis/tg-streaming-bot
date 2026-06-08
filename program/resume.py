@@ -8,9 +8,9 @@ same media seeked to the saved position via ffmpeg `-ss`.
 import os
 import asyncio
 
-from config import BOT_USERNAME
+from config import BOT_USERNAME, IDLE_LEAVE_MINUTES
 from driver.clients import call_py, bot
-from driver.queues import QUEUE, RESUME, get_queue, save_resume
+from driver.queues import QUEUE, RESUME, get_queue, save_resume, clear_queue
 from driver.filters import command, other_filters
 from driver.decorators import authorized_users_only
 from driver.utils import can_manage_vc, control_panel
@@ -94,6 +94,7 @@ async def track_position():
     RESUME is separate from QUEUE, so it survives the queue being cleared."""
     seen = {}       # chat_id -> (last_pos, frozen_seconds)
     attempts = {}   # chat_id -> consecutive auto-resume attempts
+    empty = {}      # chat_id -> seconds the voice chat has had no listeners
     ticks = 0
     while True:
         await asyncio.sleep(5)
@@ -111,6 +112,24 @@ async def track_position():
                     continue
                 head = q[0]
                 call = calls.get(chat_id)
+
+                # idle auto-leave: leave once nobody's been listening for a while
+                if IDLE_LEAVE_MINUTES > 0 and ticks % 6 == 0:
+                    try:
+                        parts = await call_py.get_participants(chat_id)
+                        n = len(parts) if parts is not None else None
+                    except Exception:
+                        n = None
+                    if n is not None and n <= 1:   # only the assistant left
+                        empty[chat_id] = empty.get(chat_id, 0) + 30
+                        if empty[chat_id] >= IDLE_LEAVE_MINUTES * 60:
+                            await call_py.leave_call(chat_id)
+                            clear_queue(chat_id)
+                            empty.pop(chat_id, None)
+                            await bot.send_message(chat_id, "👋 Left the voice chat — no one was listening.")
+                            continue
+                    else:
+                        empty.pop(chat_id, None)
 
                 # case 1: ntgcalls has no live call for this chat -> dropped
                 if call is None:

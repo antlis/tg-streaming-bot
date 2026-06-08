@@ -3,6 +3,18 @@ import json
 
 QUEUE = {}
 RESUME = {}  # last track + playback position per chat (for /continue)
+LOOP = {}    # chat_id -> True when the current track should repeat on end
+
+
+def set_loop(chat_id, on):
+    if on:
+        LOOP[chat_id] = True
+    else:
+        LOOP.pop(chat_id, None)
+
+
+def is_loop(chat_id):
+    return LOOP.get(chat_id, False)
 
 # RESUME is persisted to the downloads volume so /continue still works after a
 # bot restart/crash. (QUEUE isn't persisted — the voice-chat connection is gone
@@ -54,6 +66,7 @@ def pop_an_item(chat_id):
       return 0
       
 def clear_queue(chat_id):
+   LOOP.pop(chat_id, None)
    if chat_id in QUEUE:
       QUEUE.pop(chat_id)
       return 1

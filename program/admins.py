@@ -4,7 +4,8 @@ from driver.clients import call_py
 from pyrogram import Client, filters
 from driver.decorators import authorized_users_only
 from driver.filters import command, other_filters
-from driver.queues import QUEUE, clear_queue
+import random
+from driver.queues import QUEUE, clear_queue, get_queue, is_loop, set_loop
 from driver.utils import skip_current_song, skip_item, can_manage_vc
 from config import BOT_USERNAME, GROUP_SUPPORT, IMG_3, UPDATES_CHANNEL
 from pyrogram.enums import ChatMembersFilter
@@ -50,6 +51,43 @@ async def _admin_change_watcher(client, event):
     # Any promotion/demotion/membership change invalidates the cached admin
     # list for that chat — it gets refetched on next use (no /reload needed).
     invalidate_admin_cache(event.chat.id)
+
+
+@Client.on_message(command(["loop", f"loop@{BOT_USERNAME}", "repeat"]) & other_filters)
+@authorized_users_only
+async def loop_cmd(client, m: Message):
+    chat_id = m.chat.id
+    if chat_id not in QUEUE:
+        return await m.reply("❌ **nothing is streaming**")
+    on = not is_loop(chat_id)
+    set_loop(chat_id, on)
+    await m.reply("🔁 **Loop ON** — the current track will repeat when it ends." if on
+                  else "➡️ **Loop OFF**")
+
+
+@Client.on_message(command(["shuffle", f"shuffle@{BOT_USERNAME}"]) & other_filters)
+@authorized_users_only
+async def shuffle_cmd(client, m: Message):
+    chat_id = m.chat.id
+    q = get_queue(chat_id)
+    if not q or len(q) < 3:
+        return await m.reply("❌ need at least **2 queued** tracks to shuffle.")
+    upcoming = q[1:]
+    random.shuffle(upcoming)
+    q[1:] = upcoming
+    await m.reply(f"🔀 **Shuffled** {len(upcoming)} upcoming tracks.")
+
+
+@Client.on_message(command(["clear", f"clear@{BOT_USERNAME}", "clearqueue"]) & other_filters)
+@authorized_users_only
+async def clear_cmd(client, m: Message):
+    chat_id = m.chat.id
+    q = get_queue(chat_id)
+    if not q or len(q) < 2:
+        return await m.reply("❌ the queue is empty (nothing upcoming to clear).")
+    removed = len(q) - 1
+    del q[1:]
+    await m.reply(f"🗑 **Cleared {removed} upcoming track(s)** — current keeps playing.")
 
 
 @Client.on_message(command(["skip", f"skip@{BOT_USERNAME}", "vskip"]) & other_filters)
