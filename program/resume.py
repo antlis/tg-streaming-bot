@@ -9,15 +9,20 @@ import os
 import asyncio
 
 from config import BOT_USERNAME
-from driver.clients import call_py
+from driver.clients import call_py, bot
 from driver.queues import QUEUE, RESUME, get_queue
 from driver.filters import command, other_filters
 from driver.utils import can_manage_vc, control_panel
-from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
+from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, Call
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 _VQ = {720: VideoQuality.HD_720p, 480: VideoQuality.SD_480p, 360: VideoQuality.SD_360p}
+
+# Auto-recovery tuning: how long a stream may sit frozen (seconds) before it's
+# treated as a silent drop, and how many auto-resume attempts before giving up.
+STALL_SECONDS = 15
+MAX_RECOVER = 3
 
 
 def _fmt(sec):
@@ -41,24 +46,81 @@ def _media(info):
     )
 
 
+async def _auto_recover(chat_id, info, attempts):
+    """Auto-resume after a detected drop/stall, with a per-chat attempt cap so a
+    persistently-dead network can't spam the chat."""
+    if attempts.get(chat_id, 0) >= MAX_RECOVER:
+        return  # already gave up; stays quiet until the stream recovers on its own
+    attempts[chat_id] = attempts.get(chat_id, 0) + 1
+    try:
+        res = await resume_last(chat_id)
+    except Exception:
+        res = None
+    if res == -1:
+        await bot.send_message(chat_id, "⚠️ stream dropped and the cached file expired — replay the link.")
+        RESUME.pop(chat_id, None)
+        attempts[chat_id] = MAX_RECOVER
+        return
+    if res not in (0, None):
+        suffix = f" (attempt {attempts[chat_id]}/{MAX_RECOVER})" if attempts[chat_id] > 1 else ""
+        await bot.send_message(
+            chat_id,
+            f"🔄 **connection dropped — auto-resuming** [{info['name']}]({info['link']}) from `{_fmt(info['pos'])}`{suffix}",
+            disable_web_page_preview=True,
+            reply_markup=control_panel,
+        )
+
+
 async def track_position():
-    """Every 5s, record the playing track + position per active chat so a dropped
-    stream can be resumed. RESUME is separate from QUEUE, so it survives the queue
-    being cleared on a drop."""
+    """Every 5s: snapshot the playing track + position per active chat (so a drop
+    can be resumed), and act as a watchdog — if a chat's call is gone or its
+    position has been frozen for STALL_SECONDS while not paused, auto-resume it.
+    RESUME is separate from QUEUE, so it survives the queue being cleared."""
+    seen = {}       # chat_id -> (last_pos, frozen_seconds)
+    attempts = {}   # chat_id -> consecutive auto-resume attempts
     while True:
         await asyncio.sleep(5)
+        try:
+            calls = await call_py.calls
+        except Exception:
+            calls = {}
         for chat_id in list(QUEUE.keys()):
             try:
                 q = get_queue(chat_id)
                 if not q:
                     continue
                 head = q[0]
+                call = calls.get(chat_id)
+
+                # case 1: ntgcalls has no live call for this chat -> dropped
+                if call is None:
+                    seen.pop(chat_id, None)
+                    await _auto_recover(chat_id, RESUME.get(chat_id, {"name": head[0], "link": head[2], "pos": 0}), attempts)
+                    continue
+
+                # don't penalise a deliberately paused stream
+                if getattr(call, "status", None) == Call.Status.PAUSED:
+                    seen[chat_id] = (None, 0)
+                    continue
+
                 pos = await call_py.time(chat_id)
                 if pos and pos > 0:
                     RESUME[chat_id] = {
                         "name": head[0], "url": head[1], "link": head[2],
                         "type": head[3], "Q": head[4], "pos": int(pos),
                     }
+
+                # case 2: position frozen while supposedly active -> silent stall
+                prev, frozen = seen.get(chat_id, (None, 0))
+                if prev is not None and pos == prev:
+                    frozen += 5
+                else:
+                    frozen = 0
+                    attempts[chat_id] = 0  # healthy progress resets the backoff
+                seen[chat_id] = (pos, frozen)
+                if frozen >= STALL_SECONDS:
+                    seen[chat_id] = (pos, 0)
+                    await _auto_recover(chat_id, RESUME.get(chat_id, {"name": head[0], "link": head[2], "pos": 0}), attempts)
             except Exception:
                 pass
 
