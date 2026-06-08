@@ -21,6 +21,7 @@ BOT_COMMANDS = [
     BotCommand("library", "browse the local media library"),
     BotCommand("lplay", "play a local library file by name"),
     BotCommand("radio", "tune in to an internet radio station"),
+    BotCommand("record", "record N seconds of the radio as a voice message"),
     BotCommand("pause", "pause playback (admin)"),
     BotCommand("resume", "resume playback (admin)"),
     BotCommand("continue", "resume the last track from where it stopped"),

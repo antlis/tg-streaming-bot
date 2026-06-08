@@ -10,6 +10,7 @@ from config import BOT_USERNAME, RADIO_IMG
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue, clear_queue, get_queue
 from driver.clients import call_py
+from driver.decorators import authorized_users_only
 from driver.utils import (
     control_panel,
     ensure_assistant_in_chat,
@@ -204,6 +205,51 @@ def _kb(page):
 @Client.on_message(command(["radio", f"radio@{BOT_USERNAME}"]) & other_filters)
 async def radio(c: Client, m: Message):
     await m.reply("📻 **Radio** — pick a station:", reply_markup=_kb(0))
+
+
+@Client.on_message(command(["record", f"record@{BOT_USERNAME}", "rec"]) & other_filters)
+@authorized_users_only
+async def record_cmd(c: Client, m: Message):
+    chat_id = m.chat.id
+    q = get_queue(chat_id)
+    if not q:
+        return await m.reply("❌ nothing is playing to record.")
+    name, url, typ = q[0][0], q[0][1], q[0][3]
+    if typ == "Video":
+        return await m.reply("🎙 recording is for music / radio (audio) only.")
+    secs = 30
+    if len(m.command) > 1:
+        try:
+            secs = max(1, min(300, int(m.command[1])))
+        except ValueError:
+            pass
+    out = os.path.join("downloads", f"rec_{chat_id}.ogg")
+    pre = []
+    if not str(url).startswith("http"):  # local file: capture from the current spot
+        try:
+            pre = ["-ss", str(int(await call_py.time(chat_id)))]
+        except Exception:
+            pre = []
+    status = await m.reply(f"🔴 **Recording {secs}s…**")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-nostdin", *pre, "-i", url, "-t", str(secs),
+            "-vn", "-ac", "1", "-c:a", "libopus", "-b:a", "64k", out,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+        if proc.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 0:
+            await c.send_voice(chat_id, out, caption=f"🎙 {name[:60]} · {secs}s")
+            await status.delete()
+        else:
+            await status.edit("🚫 recording failed.")
+    except Exception as e:
+        await status.edit(f"🚫 error: `{e}`")
+    finally:
+        try:
+            os.remove(out)
+        except OSError:
+            pass
 
 
 @Client.on_callback_query(filters.regex(r"^rdnoop$"))
