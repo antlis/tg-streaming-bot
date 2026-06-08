@@ -44,3 +44,5 @@ IMG_1 = getenv("IMG_1", _DEFAULT_IMG)
 IMG_2 = getenv("IMG_2", _DEFAULT_IMG)
 IMG_3 = getenv("IMG_3", _DEFAULT_IMG)
 IMG_4 = getenv("IMG_4", _DEFAULT_IMG)
+# Card image shown while streaming radio (URL or file path). Defaults to IMG_1.
+RADIO_IMG = getenv("RADIO_IMG", "") or IMG_1

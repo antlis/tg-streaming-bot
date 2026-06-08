@@ -12,6 +12,7 @@ from pyrogram.errors import FloodWait
 from driver.clients import call_py, bot
 from driver.queues import load_resume
 from program.resume import track_position
+from program.radio import radio_updater
 
 BOT_COMMANDS = [
     BotCommand("play", "play music from YouTube, or reply to an audio"),
@@ -76,6 +77,7 @@ async def start_bot():
     load_resume()  # restore resume state so /continue survives restarts
     asyncio.ensure_future(heartbeat())
     asyncio.ensure_future(track_position())
+    asyncio.ensure_future(radio_updater())
     print("[INFO]: STARTING PYTGCALLS CLIENT")
     await call_py.start()
     await idle()

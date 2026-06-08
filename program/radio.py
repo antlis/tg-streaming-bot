@@ -1,10 +1,11 @@
 import os
+import re
 import asyncio
 import urllib.request
 
-from config import BOT_USERNAME
+from config import BOT_USERNAME, RADIO_IMG
 from driver.filters import command, other_filters
-from driver.queues import QUEUE, add_to_queue, clear_queue
+from driver.queues import QUEUE, add_to_queue, clear_queue, get_queue
 from driver.clients import call_py
 from driver.utils import (
     control_panel,
@@ -15,6 +16,48 @@ from driver.utils import (
 )
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+
+# Active now-playing cards: chat_id -> {"msg", "stream", "name", "last"}
+RADIO = {}
+
+
+def _icy_metadata(url):
+    """Best-effort ICY read: station name (header) + current track (StreamTitle
+    from the first inline metadata block). Returns {} on any failure."""
+    info = {}
+    try:
+        req = urllib.request.Request(url, headers={"Icy-MetaData": "1", "User-Agent": "Mozilla/5.0"})
+        resp = urllib.request.urlopen(req, timeout=12)
+    except Exception:
+        return info
+    try:
+        name = resp.headers.get("icy-name")
+        if name:
+            info["name"] = name.strip()
+        metaint = int(resp.headers.get("icy-metaint", "0") or 0)
+        if metaint > 0:
+            resp.read(metaint)               # skip one audio block
+            length = resp.read(1)
+            if length:
+                meta = resp.read(ord(length) * 16).decode("utf-8", "ignore")
+                m = re.search(r"StreamTitle='(.*?)';", meta)
+                if m and m.group(1).strip():
+                    info["title"] = m.group(1).strip()
+    except Exception:
+        pass
+    finally:
+        try:
+            resp.close()
+        except Exception:
+            pass
+    return info
+
+
+def _caption(station, track):
+    cap = f"📻 **Now playing radio**\n🎙 {station[:60]}"
+    if track:
+        cap += f"\n🎶 `{track[:96]}`"
+    return cap
 
 # Curated internet-radio presets (same set as tg-mpv-bot). Override with the
 # RADIO_STATIONS env var: "Name=url,Name2=url2,...".
@@ -158,6 +201,34 @@ async def radio_tune(c: Client, query: CallbackQuery):
         await call_py.play(chat_id, media_audio(stream))
         clear_queue(chat_id)  # radio takes over — it's a single live stream
         add_to_queue(chat_id, name[:70], stream, url, "Audio", 0)
-        await query.edit_message_text(f"📻 **Now playing radio:** {name[:60]}", reply_markup=control_panel)
     except Exception as e:
-        await query.edit_message_text(f"🚫 error: `{e}`")
+        return await query.edit_message_text(f"🚫 error: `{e}`")
+    # now-playing photo card, refreshed by radio_updater()
+    track = (await asyncio.to_thread(_icy_metadata, stream)).get("title")
+    try:
+        await query.message.delete()
+    except Exception:
+        pass
+    card = await c.send_photo(chat_id, RADIO_IMG, caption=_caption(name, track), reply_markup=control_panel)
+    RADIO[chat_id] = {"msg": card, "stream": stream, "name": name, "last": _caption(name, track)}
+
+
+async def radio_updater():
+    """Refresh the now-playing track on active radio cards every ~25s; drop the
+    card once the chat is no longer playing that station."""
+    while True:
+        await asyncio.sleep(25)
+        for chat_id in list(RADIO.keys()):
+            st = RADIO[chat_id]
+            q = get_queue(chat_id)
+            if not q or q[0][1] != st["stream"]:   # station changed / stopped
+                RADIO.pop(chat_id, None)
+                continue
+            track = (await asyncio.to_thread(_icy_metadata, st["stream"])).get("title")
+            cap = _caption(st["name"], track)
+            if cap != st.get("last"):
+                st["last"] = cap
+                try:
+                    await st["msg"].edit_caption(cap, reply_markup=control_panel)
+                except Exception:
+                    pass
