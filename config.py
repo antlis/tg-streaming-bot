@@ -73,3 +73,7 @@ RATE_LIMIT_WINDOW = int(getenv("RATE_LIMIT_WINDOW", "10"))
 # Max upcoming tracks in a chat's queue (the now-playing item doesn't count).
 # 0 = unlimited.
 MAX_QUEUE_SIZE = int(getenv("MAX_QUEUE_SIZE", "50"))
+
+# yt-dlp SponsorBlock — comma-separated categories to cut from YouTube downloads,
+# e.g. "sponsor,selfpromo,interaction,intro,outro,music_offtopic". Empty = off.
+SPONSORBLOCK_REMOVE = getenv("SPONSORBLOCK_REMOVE", "").strip()

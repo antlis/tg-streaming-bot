@@ -6,7 +6,7 @@ from time import time
 
 import logging
 
-from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2, MAX_QUEUE_SIZE
+from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2, MAX_QUEUE_SIZE, SPONSORBLOCK_REMOVE
 from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
@@ -60,6 +60,7 @@ async def ytdl(link, status_msg=None):
         "yt-dlp",
         "--no-warnings",
         "--no-playlist",
+        *(["--sponsorblock-remove", SPONSORBLOCK_REMOVE] if SPONSORBLOCK_REMOVE else []),
         "--no-simulate",
         "--newline",
         "--progress-template",
