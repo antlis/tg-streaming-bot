@@ -8,7 +8,7 @@ import hashlib
 import urllib.request
 
 from PIL import Image, ImageDraw, ImageFont
-from config import BOT_USERNAME, RADIO_IMG
+from config import BOT_USERNAME, RADIO_IMG, TRANSCODE_HWACCEL
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue, clear_queue, get_queue
 from driver.clients import call_py
@@ -278,6 +278,7 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
     # (-re) so "stop" captures exactly what you've watched/heard since you began.
     # Live http streams are already realtime, so neither flag is needed.
     pre = []
+    gopts = []   # ffmpeg global opts before -i (e.g. -vaapi_device)
     if not is_http:
         pos = await current_position(chat_id, url)
         dur = await _probe_duration(url)
@@ -296,12 +297,19 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
         # into mp4. Map first video+audio so extra tracks don't break the mux.
         vcodec = await _probe_vcodec(url)
         if vcodec == "h264":
-            venc = ["-c:v", "copy"]
+            venc, how = ["-c:v", "copy"], "copy"
+        elif TRANSCODE_HWACCEL == "vaapi":
+            # GPU encode: software-decode HEVC, upload, scale + encode on the GPU.
+            # Keeps the CPU free so recording doesn't stutter the live stream.
+            gopts = ["-vaapi_device", "/dev/dri/renderD128"]
+            venc = ["-vf", "format=nv12,hwupload,scale_vaapi=w=-2:h=720",
+                    "-c:v", "h264_vaapi", "-qp", "24"]
+            how = "vaapi h264"
         else:
             venc = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
                     "-vf", "scale=-2:720", "-pix_fmt", "yuv420p"]
-        log.info("record %s: source video codec=%s (%s)", chat_id, vcodec or "?",
-                 "copy" if vcodec == "h264" else "re-encode h264")
+            how = "cpu h264"
+        log.info("record %s: source video codec=%s (%s)", chat_id, vcodec or "?", how)
         args = ["-i", url, "-t", str(secs), "-map", "0:v:0", "-map", "0:a:0",
                 *venc, "-c:a", "aac", "-b:a", "160k",
                 "-movflags", "+frag_keyframe+empty_moov+default_base_moof", out]
@@ -313,7 +321,7 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
     errf = open(errlog, "w")
     try:
         proc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y", "-nostdin", *pre, *args,
+            "ffmpeg", "-y", "-nostdin", *gopts, *pre, *args,
             stdout=asyncio.subprocess.DEVNULL, stderr=errf,
         )
     finally:
