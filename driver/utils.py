@@ -470,9 +470,28 @@ async def _autoplay_next(chat_id):
         add_to_queue(chat_id, title[:70], path, link, "Audio", 0)
         recent.append(cid)
         del recent[:-30]
-        await bot.send_message(chat_id, f"🎶 **Auto-DJ:** {title[:60]}")
+        await bot.send_message(chat_id, f"🎶 **Auto-DJ ▸ up next:** {title[:60]}")
         return True
     return False
+
+
+_PREFETCH = {}  # chat_id -> src we've already kicked off an autoplay prefetch for
+
+
+async def maybe_prefetch_autoplay(chat_id):
+    """Called while a track plays: if autoplay is on and this is the *last*
+    queued track (a YouTube source), download the next related track in the
+    background now, so the hand-off is gapless instead of fetching at stream end."""
+    if not is_autoplay(chat_id):
+        return
+    q = get_queue(chat_id)
+    if not q or len(q) != 1:
+        return  # only when the current track is the last one
+    src = q[0][1]
+    if _PREFETCH.get(chat_id) == src or not _yt_id(q[0][2]):
+        return  # already prefetched for this track, or not a YouTube source
+    _PREFETCH[chat_id] = src   # mark now so we don't re-trigger while downloading
+    asyncio.ensure_future(_autoplay_next(chat_id))
 
 
 # NB: filters are classes — register an INSTANCE (stream_end()), not the class.

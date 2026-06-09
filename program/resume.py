@@ -13,7 +13,7 @@ from driver.clients import call_py, bot
 from driver.queues import QUEUE, RESUME, get_queue, save_resume, clear_queue, is_loop
 from driver.filters import command, other_filters
 from driver.decorators import authorized_users_only
-from driver.utils import can_manage_vc, control_panel
+from driver.utils import can_manage_vc, control_panel, maybe_prefetch_autoplay
 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, Call
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
@@ -160,6 +160,9 @@ async def track_position():
                 if frozen >= STALL_SECONDS:
                     seen[chat_id] = (pos, 0)
                     await _auto_recover(chat_id, RESUME.get(chat_id, {"name": head[0], "link": head[2], "pos": 0}), attempts)
+
+                # Auto-DJ: prefetch the next related track while this one plays
+                await maybe_prefetch_autoplay(chat_id)
             except Exception:
                 pass
 

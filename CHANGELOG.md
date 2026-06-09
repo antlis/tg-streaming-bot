@@ -4,6 +4,10 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] — 2026-06-09
+### Changed
+- **Gapless Auto-DJ** — the next related track is now prefetched in the background while the current one is still playing, so it starts seamlessly instead of after a short fetch pause at the end of each track.
+
 ## [1.4.0] — 2026-06-09
 ### Added
 - **Auto-DJ (`/autoplay`)** — when the queue runs out, keep playing related YouTube tracks (the song's Mix), endless-radio style. Off by default; stops on its own when the voice chat empties (idle auto-leave). Non-YouTube sources just end normally.
@@ -70,6 +74,7 @@ group voice chats.
 - Self-healing — auto-reconnect on drops, resume after a restart, idle auto-leave.
 - One-command Docker deploy; everything configured via environment variables.
 
+[1.4.1]: https://github.com/antlis/tg-streaming-bot/releases/tag/v1.4.1
 [1.4.0]: https://github.com/antlis/tg-streaming-bot/releases/tag/v1.4.0
 [1.3.0]: https://github.com/antlis/tg-streaming-bot/releases/tag/v1.3.0
 [1.2.0]: https://github.com/antlis/tg-streaming-bot/releases/tag/v1.2.0
