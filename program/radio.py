@@ -298,20 +298,38 @@ async def record_cmd(c: Client, m: Message):
     await _begin_record(c, m.chat.id, secs, send)
 
 
-@Client.on_callback_query(filters.regex(r"^recstart$"))
-async def recstart_cb(c: Client, query: CallbackQuery):
+@Client.on_callback_query(filters.regex(r"^rectoggle$"))
+async def rectoggle_cb(c: Client, query: CallbackQuery):
     chat_id = query.message.chat.id
     member = await c.get_chat_member(chat_id, query.from_user.id)
     if not can_manage_vc(member):
         return await query.answer("💡 admins (manage video chats) only", show_alert=True)
-    if chat_id in RECORDING:
-        return await query.answer("already recording — tap ⏹ Stop on the recording message", show_alert=True)
+    if chat_id in RECORDING:   # toggle: already recording -> stop & send
+        RECORDING[chat_id]["stop"].set()
+        return await query.answer("⏹ stopping & sending…")
     await query.answer("⏺ recording…")
 
     async def send(text, markup=None):
         return await c.send_message(chat_id, text, reply_markup=markup)
 
     await _begin_record(c, chat_id, RECORD_MAX, send)
+
+
+async def _remux_faststart(src):
+    """Copy a fragmented-mp4 recording into a normal faststart mp4 (correct moov /
+    duration so Telegram plays it). Returns the new path, or None on failure."""
+    dst = src[:-4] + "_final.mp4" if src.endswith(".mp4") else src + "_final.mp4"
+    try:
+        p = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-nostdin", "-i", src, "-c", "copy", "-movflags", "+faststart", dst,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(p.wait(), 120)
+        if p.returncode == 0 and os.path.exists(dst) and os.path.getsize(dst) > 0:
+            return dst
+    except Exception:
+        pass
+    return None
 
 
 async def _record_watch(c: Client, chat_id):
@@ -351,10 +369,19 @@ async def _record_watch(c: Client, chat_id):
     secs = time.time() - rec["start"]
     if rec["video"]:
         cap = _rec_caption(rec["name"], [], secs, icon="🎬")
+        # The recording is a fragmented mp4 (survives the SIGTERM stop), but its
+        # moov reports the wrong duration so Telegram shows 0:00 / no content.
+        # Remux to a normal faststart mp4 (copy, fast) so it plays as a video.
+        send_path = await _remux_faststart(out) or out
         try:
-            await c.send_video(chat_id, out, caption=cap)
+            await c.send_video(chat_id, send_path, caption=cap, supports_streaming=True)
         except Exception as e:
             await c.send_message(chat_id, f"🚫 couldn't send the recording: `{e}`")
+        if send_path != out:
+            try:
+                os.remove(send_path)
+            except OSError:
+                pass
     else:
         cap = _rec_caption(rec["name"], rec["tracks"], secs)
         try:
