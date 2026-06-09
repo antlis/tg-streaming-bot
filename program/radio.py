@@ -41,6 +41,20 @@ async def _probe_duration(path):
         return 0.0
 
 
+async def _probe_vcodec(path):
+    """Codec name of the first video stream ('' if unknown)."""
+    try:
+        p = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=codec_name", "-of", "csv=p=0", path,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(p.communicate(), 20)
+        return out.decode().strip()
+    except Exception:
+        return ""
+
+
 def _render_card(station):
     """Render a static placeholder image (station name + LIVE over the radio art)
     to stream as the voice-chat video feed. Cached per station."""
@@ -275,14 +289,21 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
         pre += ["-ss", str(int(pos)), "-re"]
     if is_video:
         out = os.path.join("downloads", f"rec_{chat_id}.mp4")
-        # Copy the video (fast, lossless) but always re-encode audio to AAC:
-        # library files are often MKV with E-AC3 / other audio that can't be muxed
-        # into mp4 via copy ("Cannot write moov atom before EAC3 packets parsed").
-        # Map just the first video+audio so extra audio / subtitle tracks don't
-        # break the mux. Fragmented mp4 stays valid if the stop kills ffmpeg early.
-        args = ["-i", url, "-t", str(secs),
-                "-map", "0:v:0", "-map", "0:a:0",
-                "-c:v", "copy", "-c:a", "aac", "-b:a", "160k",
+        # Telegram plays H.264 everywhere but not HEVC/VP9 reliably (an HEVC source
+        # showed up audio-only). So copy the video only when it's already H.264,
+        # otherwise re-encode to H.264 720p (keeps up at realtime). Audio is always
+        # re-encoded to AAC — library MKVs are often E-AC3, which can't be copied
+        # into mp4. Map first video+audio so extra tracks don't break the mux.
+        vcodec = await _probe_vcodec(url)
+        if vcodec == "h264":
+            venc = ["-c:v", "copy"]
+        else:
+            venc = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                    "-vf", "scale=-2:720", "-pix_fmt", "yuv420p"]
+        log.info("record %s: source video codec=%s (%s)", chat_id, vcodec or "?",
+                 "copy" if vcodec == "h264" else "re-encode h264")
+        args = ["-i", url, "-t", str(secs), "-map", "0:v:0", "-map", "0:a:0",
+                *venc, "-c:a", "aac", "-b:a", "160k",
                 "-movflags", "+frag_keyframe+empty_moov+default_base_moof", out]
     else:
         out = os.path.join("downloads", f"rec_{chat_id}.ogg")
