@@ -3,14 +3,16 @@
 Telegram bot that streams **music & video into group voice chats**, built with [Pyrogram](https://docs.pyrogram.org) and [py-tgcalls](https://github.com/pytgcalls/pytgcalls).
 
 ## ✨ Features
-- Music & video streaming into group voice chats
-- Play from YouTube (search **or** direct URL), or from audio/video files posted in Telegram
-- Live stream support (links / m3u8)
-- Queue & playlist, skip / pause / resume / stop
-- Live download-progress bar for Telegram files
-- Inline transport control panel on the now-playing card (⏸ ▶️ ⏭ 🔇 🔊 ⏹)
-- Music & video downloader, inline search
-- Volume control, assistant auto-join
+- **Music & video** into group voice chats — from YouTube (search **or** URL), an audio/video file posted in Telegram, or a live link (m3u8 / YouTube-live)
+- **`/search`** — pick from YouTube results (🎵 audio or 🎬 video) instead of auto-playing the first hit
+- **Internet radio** — dozens of built-in stations, with the live now-playing track shown on the video card
+- **Local media library** — browse & play your own folders, with audio-track and subtitle selection
+- **Recording** — capture the radio/audio to a voice message or the video to an H.264 mp4 and upload it (toggle on/off, live tracklist)
+- **Screenshot** — grab the current video frame to the chat
+- **Full controls** — pause / resume / skip / seek, **master volume**, mute, loop / shuffle / clear, seek-to-% buttons and a queue — one inline now-playing panel plus `/info`
+- **Hardware transcoding** (VAAPI) or CPU for HEVC/MKV sources
+- **Self-healing** — auto-reconnect on drops, resume after a restart, idle auto-leave
+- Per-user **rate limiting** + a **max-queue** cap; everything env-configured for self-hosting
 
 ## How it works
 Two Telegram identities are required:
@@ -28,14 +30,13 @@ Two Telegram identities are required:
    cp example.env .env
    ```
    See the table below — only the **Required** block is mandatory.
-3. Generate the assistant session string (logs in with Pyrogram 2.x and converts
-   to the 1.x format the bot uses — Telegram blocks logins from old clients):
+3. Generate the assistant session string — log in as the **assistant** account
+   and paste the printed string into `SESSION_NAME` in `.env`:
    ```sh
    docker run -it --rm --env-file .env \
-     -v $(pwd)/gen_session.py:/gen.py python:3.9 \
-     sh -c "pip install -q pyrogram==2.0.106 tgcrypto && python3 /gen.py"
+     -v "$(pwd)/gen_session.py:/gen.py" python:3.11-slim \
+     sh -c "pip install -q kurigram tgcrypto && python3 /gen.py"
    ```
-   Log in with the **assistant** account, then paste the printed string into `SESSION_NAME` in `.env`.
 4. Build & run (compose is the easy way — includes the cache volume and a healthcheck):
    ```sh
    docker compose up -d --build
@@ -60,6 +61,14 @@ Two Telegram identities are required:
 | `SUDO_USERS` | ✅ | space-separated admin user ids |
 | `DURATION_LIMIT` | — | max track length (minutes) |
 | `DOWNLOADS_CACHE_LIMIT_MB` | — | downloads-cache cap in MB, pruned after each stream (default 4096; 0 = delete after playing) |
+| `LIBRARY_HOST_DIR` / `LIBRARY_ROOT` / `LIBRARY_CATEGORIES` | — | local media library: host folder to mount read-only, the in-container path (`/library`), and an optional comma-separated category allowlist; leave unset to disable |
+| `RADIO_STATIONS` | — | override the built-in `/radio` presets (`Name=URL,Name=URL,…`) |
+| `RADIO_IMG` | — | card image shown while streaming radio (defaults to `IMG_1`) |
+| `TRANSCODE_HWACCEL` | — | `vaapi` for GPU transcode/record (needs `/dev/dri` mounted + VA drivers); empty = CPU |
+| `IDLE_LEAVE_MINUTES` | — | leave the voice chat after N minutes with no listeners (default 10; 0 = never) |
+| `MAX_QUEUE_SIZE` | — | max upcoming tracks per chat (default 50; 0 = unlimited) |
+| `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW` | — | per-user command rate limit (default 5 commands / 10s; sudo users exempt) |
+| `COMMAND_PREFIXES` | — | accepted command prefixes (default `/ ! .`) |
 | `ASSISTANT_NAME` | — | assistant @username (without @), used in messages |
 | `OWNER_NAME` / `ALIVE_NAME` | — | owner link & name for `/start` and `/alive`; empty = hidden |
 | `GROUP_SUPPORT` / `UPDATES_CHANNEL` | — | username or `+invitehash` for the Group/Channel buttons; empty = hidden |
@@ -70,17 +79,22 @@ Two Telegram identities are required:
 ## 🛠 Commands
 | Command | Description |
 | ------ | ------ |
-| `/play <query or YouTube URL>` | play music (or reply to an audio / voice / audio-file message) |
-| `/vplay <query or YouTube URL> [720\|480\|360] [mute]` | play video (or reply to a video); `mute` starts it muted |
+| `/play <query\|URL>` | play music (or reply to an audio / voice / audio-file message) |
+| `/vplay <query\|URL> [720\|480\|360] [mute]` | play video (or reply to a video); `mute` starts it muted |
 | `/vstream <link>` | stream a live link / m3u8 / YouTube live |
+| `/search <query>` | pick from YouTube results — 🎵 audio or 🎬 video |
+| `/radio` | internet radio — pick a station |
+| `/record [secs]` · `/stoprec` | record the current audio/video and send it (⏺ on the panel toggles; auto-stops at 1 h) |
+| `/library` · `/lplay <name>` | browse / play the local media library |
+| `/screenshot` | send a frame of the current video |
 | `/pause` `/resume` `/skip` `/stop` | playback control (admins) |
-| `/vmute` `/vunmute` | mute / unmute the assistant in the voice chat |
-| `/volume 1-200` | set volume (assistant must be admin) |
-| `/playlist` | show the current queue |
-| `/song <query>` / `/video <query>` | download instead of stream |
-| `/userbotjoin` `/userbotleave` | assistant joins / leaves the group |
+| `/seek 12:30` · `/continue` | jump to a time / resume after a drop |
+| `/volume 0-200` · `/vmute` `/vunmute` | master volume / mute (applied to the stream, heard by everyone) |
+| `/loop` `/shuffle` `/clear` | queue modes (admins) |
+| `/info` · `/playlist` | now-playing panel with controls / the queue |
+| `/song <query>` · `/video <query>` | download instead of stream |
+| `/userbotjoin` `/userbotleave` · `/reload` | assistant join / leave · refresh admin cache |
 | `/ping` `/alive` `/uptime` | status checks |
-| `/clean` `/rmd` | clean raw / downloaded files |
 
 ## Notes
 - YouTube playback **downloads first, then streams** (yt-dlp with the `android_vr` client; H.264+AAC mp4) — direct stream URLs are blocked by YouTube these days. Expect a short delay before playback starts.
@@ -123,27 +137,17 @@ affect anything else on the host.
 
 ## Roadmap / TODO
 
-### High impact
-- [ ] **Modernize the stack** — bump the base image to Python 3.11 and migrate to Pyrogram 2.x + py-tgcalls 2.x (ntgcalls). This removes three legacy workarounds at once: the `MsgId` time-sync monkeypatch, the session-string 1.x repacking in `gen_session.py`, and the yt-dlp `2025.10.14` cap (current yt-dlp handles YouTube without the `android_vr` pin). Big migration — the whole py-tgcalls streaming API changed.
-- [ ] **Stream-while-downloading** — start playback once enough of the file is buffered instead of waiting for the full download (large files currently sit silent for minutes; pipe yt-dlp/ffmpeg output instead of `--print after_move:filepath`).
-- [x] **Download progress for YouTube** — the progress bar currently only covers Telegram file downloads; parse yt-dlp's progress output (`--newline` / `--progress-template`) and edit the status message the same way.
-- [x] **Auto-clean `downloads/`** — files accumulate forever; delete after playback ends (hook `on_stream_end`) or keep an LRU-capped cache. Add an optional max-file-size guard.
+Done so far: modern stack (Python 3.11, Pyrogram 2.x / py-tgcalls 2.x), YouTube
+search picker, internet radio, local media library with audio/subtitle
+selection, audio **and** video recording, screenshots, master volume + mute,
+seek / seek-to-%, loop / shuffle / clear, auto-reconnect & resume, idle
+auto-leave, hardware (VAAPI) transcoding, download-cache GC, rate limiting,
+startup config validation, logging, and CI.
 
-### Features
-- [x] Register bot commands on startup (`set_bot_commands`) so Telegram's `/` autocomplete works without manual @BotFather setup
-- [x] `/play` should accept audio sent as a *document* (generic .mp3 file) — currently only `audio`/`voice` types are recognized
-- [x] `/vplay <query> mute` — start a video muted in one step (today: `/vplay` then `/vmute`)
-- [ ] `/seek <seconds>` and a now-playing elapsed/duration display on the card
-- [ ] Loop / repeat-one / shuffle modes for the queue
-- [ ] Queue management: show durations, remove an arbitrary item, reorder
-- [ ] Spotify / SoundCloud / direct-URL sources (yt-dlp already supports most of them — mainly needs URL routing + metadata)
-- [ ] i18n — user-facing strings are hardcoded English, scattered across handlers; extract to a strings module
-
-### Code quality / ops
-- [ ] **Deduplicate `music.py` / `video.py`** — `ytsearch()`, `ytdl()`, the admin-permission gate, and the assistant-join logic are near-identical copies; extract to shared helpers
-- [x] Drop unused dependencies: `motor`, `heroku3`, `dnspython`, `future` (no imports anywhere); consolidate `youtube-search` vs `youtube-search-python`
-- [x] Auto-invalidate the admin cache on `ChatMemberUpdated` instead of requiring manual `/reload`
-- [x] Add `docker-compose.yml` (one-command setup for adopters) and a container healthcheck
-- [ ] Tests (there are none) — at least for the queue, the session-string repack, and `ytsearch` URL detection; wire into CI (the GitHub workflows are stale upstream leftovers)
-- [ ] Auto-leave the voice chat after N minutes idle (assistant currently stays parked)
-- [ ] Replace bare `except`/`print(e)` error handling with proper logging
+Still open:
+- [ ] **Stream-while-downloading** — begin playback once enough is buffered instead of waiting for the full download (large files sit silent for a while today).
+- [ ] **Queue management** — show durations, remove an arbitrary item, reorder.
+- [ ] **More sources** — Spotify / SoundCloud / direct-URL routing (yt-dlp already supports most; mainly needs URL routing + metadata).
+- [ ] **Deduplicate `music.py` / `video.py`** — `ytsearch()`, `ytdl()`, the permission gate and assistant-join logic are near-identical copies; extract shared helpers.
+- [ ] **More tests** — only a smoke/import check runs in CI today; add unit tests for the queue, seek/position, and `ytsearch` URL detection.
+- [ ] **i18n** — user-facing strings are hardcoded English; extract to a strings module.
