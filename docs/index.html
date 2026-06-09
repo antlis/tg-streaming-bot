@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tg-streaming-bot — music &amp; video in Telegram voice chats</title>
+<meta name="description" content="A self-hosted Telegram bot that streams music and video into group voice chats: YouTube, internet radio, your own media library, recording, and full playback controls.">
+<meta property="og:title" content="tg-streaming-bot">
+<meta property="og:description" content="Stream music &amp; video into Telegram group voice chats. YouTube, radio, local library, recording, and full controls — self-hosted and open source.">
+<meta property="og:type" content="website">
+<style>
+  :root{
+    --bg:#0d1117; --bg2:#11161d; --card:#161c25; --line:#222b38;
+    --fg:#e6edf3; --mut:#8b97a7; --accent:#2aabee; --accent2:#229ed9;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1000px; margin:0 auto; padding:0 20px}
+  .btn{
+    display:inline-block; padding:12px 22px; border-radius:10px; font-weight:600;
+    background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff;
+  }
+  .btn:hover{text-decoration:none; opacity:.92}
+  .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--fg)}
+
+  /* hero */
+  header{
+    text-align:center; padding:90px 20px 70px;
+    background:radial-gradient(1200px 500px at 50% -10%, rgba(42,171,238,.18), transparent 60%);
+    border-bottom:1px solid var(--line);
+  }
+  .logo{font-size:60px; line-height:1}
+  h1{font-size:44px; margin:14px 0 6px; letter-spacing:-.02em}
+  .tag{font-size:20px; color:var(--mut); max-width:620px; margin:0 auto 28px}
+  .cta{display:flex; gap:12px; justify-content:center; flex-wrap:wrap}
+  .stack{margin-top:30px; color:var(--mut); font-size:14px}
+
+  section{padding:64px 0; border-bottom:1px solid var(--line)}
+  h2{font-size:28px; margin:0 0 8px; letter-spacing:-.01em}
+  .sub{color:var(--mut); margin:0 0 32px}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:22px; transition:border-color .2s, transform .2s;
+  }
+  .card:hover{border-color:var(--accent2); transform:translateY(-2px)}
+  .card .ico{font-size:26px}
+  .card h3{margin:10px 0 6px; font-size:18px}
+  .card p{margin:0; color:var(--mut); font-size:14.5px}
+
+  /* commands */
+  .cmds{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:24px}
+  .cmds h4{margin:0 0 10px; font-size:14px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent)}
+  .cmds ul{list-style:none; margin:0; padding:0}
+  .cmds li{padding:5px 0; color:var(--mut); font-size:14.5px}
+  code{
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:13px;
+    background:#0a0e14; border:1px solid var(--line); border-radius:6px; padding:1px 6px; color:#cdd9e5;
+  }
+  pre{
+    background:#0a0e14; border:1px solid var(--line); border-radius:12px;
+    padding:18px 20px; overflow:auto; font-size:13.5px; line-height:1.7;
+  }
+  pre code{background:none; border:none; padding:0}
+  ol.steps{padding-left:20px} ol.steps li{margin:0 0 14px}
+
+  footer{padding:40px 20px 60px; text-align:center; color:var(--mut); font-size:14px}
+  footer a{color:var(--mut); text-decoration:underline}
+  @media(max-width:560px){h1{font-size:34px} .tag{font-size:17px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="logo">🎬</div>
+    <h1>tg-streaming-bot</h1>
+    <p class="tag">A self-hosted Telegram bot that streams <strong>music &amp; video</strong> straight into your group's voice chat.</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/antlis/tg-streaming-bot">View on GitHub</a>
+      <a class="btn ghost" href="#quickstart">Deploy your own</a>
+    </div>
+    <div class="stack">Built with Pyrogram&nbsp;·&nbsp;py-tgcalls&nbsp;·&nbsp;ffmpeg&nbsp;·&nbsp;yt-dlp</div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Everything you'd want in a voice-chat player</h2>
+    <p class="sub">One bot + a dedicated assistant account join the call and stream — you control it all from chat.</p>
+    <div class="grid">
+      <div class="card"><div class="ico">🎵</div><h3>YouTube &amp; files</h3><p>Play from a search query, a direct URL, or any audio file posted in the chat.</p></div>
+      <div class="card"><div class="ico">🎬</div><h3>Video &amp; live</h3><p>Stream videos and live sources (m3u8, YouTube-live) with selectable 720/480/360 quality.</p></div>
+      <div class="card"><div class="ico">🔎</div><h3>Search picker</h3><p><code>/search</code> lists the top results as buttons — pick one to play as audio or video.</p></div>
+      <div class="card"><div class="ico">📻</div><h3>Internet radio</h3><p>Dozens of built-in stations with the live now-playing track shown on the video feed.</p></div>
+      <div class="card"><div class="ico">📼</div><h3>Recording</h3><p>Record the radio or a video stream to a voice/video message — stop anytime, with a live tracklist.</p></div>
+      <div class="card"><div class="ico">📁</div><h3>Local library</h3><p>Browse and play your own media folders, with audio-track and subtitle selection at play time.</p></div>
+      <div class="card"><div class="ico">🎛️</div><h3>Full controls</h3><p>Pause, resume, skip, seek, volume, loop, shuffle, queue — plus an inline control panel.</p></div>
+      <div class="card"><div class="ico">⚡</div><h3>Hardware transcoding</h3><p>VAAPI GPU or CPU transcoding handles HEVC/MKV and anything the stream engine can't take raw.</p></div>
+      <div class="card"><div class="ico">🔁</div><h3>Self-healing</h3><p>Auto-reconnects after a drop, resumes the last track after a restart, and leaves when idle.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="commands">
+  <div class="wrap">
+    <h2>Commands</h2>
+    <p class="sub">A few of the essentials — full list in the bot via <code>/help</code>.</p>
+    <div class="cmds">
+      <div>
+        <h4>Play</h4>
+        <ul>
+          <li><code>/play &lt;query|url&gt;</code> — music</li>
+          <li><code>/vplay &lt;query|url&gt;</code> — video</li>
+          <li><code>/vstream &lt;link&gt;</code> — live / m3u8</li>
+          <li><code>/search &lt;query&gt;</code> — results picker</li>
+          <li><code>/radio</code> — internet radio</li>
+          <li><code>/library</code> · <code>/lplay</code> — local media</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Control</h4>
+        <ul>
+          <li><code>/pause</code> <code>/resume</code> <code>/skip</code> <code>/stop</code></li>
+          <li><code>/seek 12:30</code> — jump to a time</li>
+          <li><code>/volume 1-200</code></li>
+          <li><code>/loop</code> <code>/shuffle</code> <code>/clear</code></li>
+          <li><code>/info</code> — now playing + controls</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Capture &amp; setup</h4>
+        <ul>
+          <li><code>/record</code> — record audio/video</li>
+          <li><code>/stoprec</code> — stop &amp; send</li>
+          <li><code>/song</code> · <code>/video</code> — download</li>
+          <li><code>/userbotjoin</code> · <code>/reload</code></li>
+          <li><code>/alive</code> · <code>/ping</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="wrap">
+    <h2>Quick start</h2>
+    <p class="sub">Runs anywhere Docker does. You'll need a bot token, Telegram API credentials, and a session string for the assistant account.</p>
+    <ol class="steps">
+      <li>Clone and configure:
+        <pre><code>git clone https://github.com/antlis/tg-streaming-bot.git
+cd tg-streaming-bot
+cp example.env .env   # fill in the Required block</code></pre>
+      </li>
+      <li>Build &amp; run:
+        <pre><code>docker compose up -d --build</code></pre>
+      </li>
+      <li>In your group: add the bot as admin, start a voice chat, then <code>/userbotjoin</code> and <code>/play &lt;song&gt;</code>.</li>
+    </ol>
+    <p>Full setup, configuration reference, and notes on running where Telegram is filtered are in the
+       <a href="https://github.com/antlis/tg-streaming-bot#readme">README</a>.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p><a href="https://github.com/antlis/tg-streaming-bot">GitHub</a> &nbsp;·&nbsp;
+       <a href="https://github.com/antlis/tg-streaming-bot/blob/main/CONTRIBUTING.md">Contributing</a> &nbsp;·&nbsp;
+       <a href="https://github.com/antlis/tg-streaming-bot/blob/main/LICENSE">License</a></p>
+    <p>Open source · self-hosted · not affiliated with Telegram.</p>
+  </div>
+</footer>
+
+</body>
+</html>
