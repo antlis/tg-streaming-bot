@@ -41,6 +41,7 @@ BOT_COMMANDS = [
     BotCommand("vunmute", "unmute the assistant in the voice chat"),
     BotCommand("playlist", "show the current queue"),
     BotCommand("info", "now playing + controls"),
+    BotCommand("screenshot", "screenshot the current video"),
     BotCommand("help", "show the command list"),
     BotCommand("song", "download a song from YouTube"),
     BotCommand("video", "download a video from YouTube"),

@@ -104,6 +104,70 @@ async def replay_at_gain(chat_id, vol_pct):
     return True
 
 
+async def probe_duration(path):
+    """Duration of a media file in seconds (0.0 if unknown)."""
+    try:
+        p = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "csv=p=0", path,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(p.communicate(), 20)
+        return float(out.decode().strip())
+    except Exception:
+        return 0.0
+
+
+async def seek_current(chat_id, seconds, vol_pct=100):
+    """Re-feed the current local stream from `seconds`, preserving vol_pct% gain
+    (the seek-to-% buttons). Live/radio can't be seeked — just re-applies gain."""
+    vol = max(0, vol_pct) / 100.0
+    try:
+        from program.radio import replay_radio_at_gain
+        if await replay_radio_at_gain(chat_id, vol):
+            return True
+    except Exception:
+        pass
+    q = get_queue(chat_id)
+    if not q:
+        return False
+    src, typ, quality = q[0][1], q[0][3], q[0][4]
+    pos = max(0, int(seconds)) if not str(src).startswith("http") else 0
+    stream = media_video_gain(src, quality, vol, pos) if typ == "Video" else media_audio_gain(src, vol, pos)
+    await call_py.play(chat_id, stream)
+    if not str(src).startswith("http"):
+        _GAIN_BASE[chat_id] = {"src": src, "base": pos}
+    return True
+
+
+async def capture_frame(chat_id):
+    """Grab the current frame of the playing video as a JPEG. Returns the path, or
+    None if nothing video is playing / capture failed."""
+    q = get_queue(chat_id)
+    if not q:
+        return None
+    src, typ = q[0][1], q[0][3]
+    if typ != "Video":
+        return None
+    pre = []
+    if not str(src).startswith("http"):
+        pos = await current_position(chat_id, src)
+        if pos > 0:
+            pre = ["-ss", str(int(pos))]
+    out = os.path.join("downloads", f"snap_{chat_id}.jpg")
+    try:
+        p = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-nostdin", *pre, "-i", src, "-frames:v", "1", "-q:v", "2", out,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(p.wait(), 40)
+        if p.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 0:
+            return out
+    except Exception:
+        pass
+    return None
+
+
 async def drop_stale_queue(chat_id) -> bool:
     """If we think a chat is queued but py-tgcalls has no live call for it
     (e.g. the stream silently died without firing a lifecycle event), clear the
@@ -205,12 +269,19 @@ control_panel = InlineKeyboardMarkup(
             InlineKeyboardButton("⏹", callback_data="cbstop"),
         ],
         [
+            InlineKeyboardButton("0%", callback_data="seekp:0"),
+            InlineKeyboardButton("25%", callback_data="seekp:25"),
+            InlineKeyboardButton("50%", callback_data="seekp:50"),
+            InlineKeyboardButton("75%", callback_data="seekp:75"),
+        ],
+        [
             InlineKeyboardButton("🔉", callback_data="cbvoldown"),
             InlineKeyboardButton("🔊", callback_data="cbvolup"),
             InlineKeyboardButton("🔇", callback_data="cbmute"),
             InlineKeyboardButton("🔈", callback_data="cbunmute"),
         ],
         [
+            InlineKeyboardButton("📸", callback_data="snap"),
             InlineKeyboardButton("⏺ Rec / Stop", callback_data="rectoggle"),
             InlineKeyboardButton("🗑 Close", callback_data="cls"),
         ],

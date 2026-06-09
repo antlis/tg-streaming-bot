@@ -6,7 +6,12 @@ from driver.decorators import authorized_users_only
 from driver.filters import command, other_filters
 import random
 from driver.queues import QUEUE, clear_queue, get_queue, is_loop, set_loop
-from driver.utils import skip_current_song, skip_item, can_manage_vc, replay_at_gain
+import os
+
+from driver.utils import (
+    skip_current_song, skip_item, can_manage_vc, replay_at_gain,
+    seek_current, capture_frame, probe_duration,
+)
 from config import BOT_USERNAME, GROUP_SUPPORT, IMG_3, UPDATES_CHANNEL
 from pyrogram.enums import ChatMembersFilter
 from pyrogram.types import (
@@ -395,3 +400,57 @@ async def cbvolup(_, query: CallbackQuery):
 @Client.on_callback_query(filters.regex("cbvoldown"))
 async def cbvoldown(_, query: CallbackQuery):
     await _step_volume(_, query, -VOLUME_STEP)
+
+
+@Client.on_callback_query(filters.regex(r"^seekp:"))
+async def cbseekpercent(_, query: CallbackQuery):
+    if query.message.sender_chat:
+        return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
+    a = await _.get_chat_member(query.message.chat.id, query.from_user.id)
+    if not can_manage_vc(a):
+        return await query.answer("💡 only admin with manage voice chats permission that can tap this button !", show_alert=True)
+    chat_id = query.message.chat.id
+    if chat_id not in QUEUE:
+        return await query.answer("❌ nothing is currently streaming", show_alert=True)
+    src = QUEUE[chat_id][0][1]
+    if str(src).startswith("http"):
+        return await query.answer("⛔ can't seek a live stream", show_alert=True)
+    try:
+        pct = int(query.data.split(":")[1])
+    except (IndexError, ValueError):
+        return await query.answer("bad seek", show_alert=True)
+    dur = await probe_duration(src)
+    if dur <= 0:
+        return await query.answer("unknown duration — use /seek 12:30", show_alert=True)
+    await query.answer(f"⏩ seeking to {pct}% — re-buffering…")
+    await seek_current(chat_id, int(dur * pct / 100), VOLUME.get(chat_id, 100))
+
+
+async def _send_screenshot(c, chat_id, fail):
+    """Shared by the 📸 button and /screenshot. `fail` is an async (text)->None."""
+    if chat_id not in QUEUE:
+        return await fail("❌ nothing is playing.")
+    if QUEUE[chat_id][0][3] != "Video":
+        return await fail("📸 screenshots are for video.")
+    path = await capture_frame(chat_id)
+    if not path:
+        return await fail("🚫 couldn't capture a frame.")
+    try:
+        await c.send_photo(chat_id, path, caption="📸 now playing")
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+@Client.on_callback_query(filters.regex(r"^snap$"))
+async def cbsnap(c: Client, query: CallbackQuery):
+    await query.answer("📸 capturing…")
+    await _send_screenshot(c, query.message.chat.id,
+                           lambda t: query.answer(t, show_alert=True))
+
+
+@Client.on_message(command(["screenshot", f"screenshot@{BOT_USERNAME}", "snap"]) & other_filters)
+async def screenshot_cmd(c: Client, m: Message):
+    await _send_screenshot(c, m.chat.id, m.reply)
