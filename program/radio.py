@@ -3,6 +3,7 @@ import os
 import re
 import time
 import asyncio
+import logging
 import hashlib
 import urllib.request
 
@@ -17,10 +18,27 @@ from driver.utils import (
     ensure_assistant_in_chat,
     drop_stale_queue,
     can_manage_vc,
+    current_position,
 )
 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+
+log = logging.getLogger(__name__)
+
+
+async def _probe_duration(path):
+    """Duration of a media file in seconds (0.0 if unknown / not probeable)."""
+    try:
+        p = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "csv=p=0", path,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(p.communicate(), 20)
+        return float(out.decode().strip())
+    except Exception:
+        return 0.0
 
 
 def _render_card(station):
@@ -247,11 +265,14 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
     # Live http streams are already realtime, so neither flag is needed.
     pre = []
     if not is_http:
-        try:
-            pre += ["-ss", str(int(await call_py.time(chat_id)))]
-        except Exception:
-            pass
-        pre += ["-re"]
+        pos = await current_position(chat_id, url)
+        dur = await _probe_duration(url)
+        # A seek past EOF yields an empty 0:00 file — clamp into the media, and
+        # never closer than `secs` from the end so there's something to capture.
+        if dur > 0:
+            pos = max(0, min(pos, int(dur) - 2))
+        log.info("record %s: video=%s pos=%ss dur=%ss", chat_id, is_video, pos, int(dur) if dur else "?")
+        pre += ["-ss", str(int(pos)), "-re"]
     if is_video:
         out = os.path.join("downloads", f"rec_{chat_id}.mp4")
         # The streamed source is already H.264/AAC so copy is instant & lossless;
@@ -262,10 +283,15 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
         out = os.path.join("downloads", f"rec_{chat_id}.ogg")
         args = ["-i", url, "-t", str(secs), "-vn", "-ac", "1",
                 "-c:a", "libopus", "-b:a", "64k", out]
-    proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-y", "-nostdin", *pre, *args,
-        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-    )
+    errlog = os.path.join("downloads", f"rec_{chat_id}.log")
+    errf = open(errlog, "w")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-nostdin", *pre, *args,
+            stdout=asyncio.subprocess.DEVNULL, stderr=errf,
+        )
+    finally:
+        errf.close()  # the child keeps its own dup of the fd
     track0 = None
     if not is_video and is_http:
         track0 = (await asyncio.to_thread(_icy_metadata, url)).get("title")
@@ -277,7 +303,7 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
     RECORDING[chat_id] = {
         "proc": proc, "out": out, "name": name, "url": url, "video": is_video,
         "tracks": [track0] if track0 else [], "stop": asyncio.Event(),
-        "status": status, "start": time.time(),
+        "status": status, "start": time.time(), "errlog": errlog,
     }
     asyncio.ensure_future(_record_watch(c, chat_id))
 
@@ -364,8 +390,27 @@ async def _record_watch(c: Client, chat_id):
     except Exception:
         pass
     out = rec["out"]
-    if not (os.path.exists(out) and os.path.getsize(out) > 0):
-        return await c.send_message(chat_id, "🚫 recording failed.")
+    # surface ffmpeg's reason if the capture produced nothing useful
+    errlog = rec.get("errlog")
+    tail = ""
+    if errlog and os.path.exists(errlog):
+        try:
+            with open(errlog) as f:
+                tail = f.read()[-600:]
+        except OSError:
+            pass
+        try:
+            os.remove(errlog)
+        except OSError:
+            pass
+    # a valid recording is more than just an mp4 header (~a few KB)
+    if not (os.path.exists(out) and os.path.getsize(out) > 4096):
+        log.warning("record %s produced no content. ffmpeg tail:\n%s", chat_id, tail)
+        try:
+            os.remove(out)
+        except OSError:
+            pass
+        return await c.send_message(chat_id, "🚫 recording produced no content — check the bot logs.")
     secs = time.time() - rec["start"]
     if rec["video"]:
         cap = _rec_caption(rec["name"], [], secs, icon="🎬")

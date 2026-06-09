@@ -63,6 +63,19 @@ def media_video_gain(path, quality, vol, pos=0):
 _GAIN_BASE = {}  # chat_id -> {"src": str, "base": int(seconds)}
 
 
+async def current_position(chat_id, src):
+    """Best-effort absolute playback position (seconds) of the current local
+    stream. call_py.time() resets to 0 on every play(), so add the offset of the
+    last re-feed (tracked in _GAIN_BASE) to the elapsed time since it."""
+    prev = _GAIN_BASE.get(chat_id)
+    base = prev["base"] if prev and prev.get("src") == src else 0
+    try:
+        delta = int(await call_py.time(chat_id))
+    except Exception:
+        delta = 0
+    return base + max(0, delta)
+
+
 async def replay_at_gain(chat_id, vol_pct):
     """Re-feed the current stream at vol_pct% loudness — the master-volume / mute
     lever. Because it keeps the assistant continuously streaming (rather than
@@ -82,13 +95,7 @@ async def replay_at_gain(chat_id, vol_pct):
     src, typ, quality = q[0][1], q[0][3], q[0][4]
     pos = 0
     if not str(src).startswith("http"):   # seek local files back to the live spot
-        prev = _GAIN_BASE.get(chat_id)
-        base = prev["base"] if prev and prev.get("src") == src else 0
-        try:
-            delta = int(await call_py.time(chat_id))
-        except Exception:
-            delta = 0
-        pos = base + max(0, delta)
+        pos = await current_position(chat_id, src)
     stream = media_video_gain(src, quality, vol, pos) if typ == "Video" else media_audio_gain(src, vol, pos)
     await call_py.play(chat_id, stream)
     if not str(src).startswith("http"):
