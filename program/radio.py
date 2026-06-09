@@ -442,7 +442,29 @@ async def radio_tune(c: Client, query: CallbackQuery):
     except Exception:
         pass
     card = await c.send_photo(chat_id, card_img or RADIO_IMG, caption=_caption(name, track), reply_markup=control_panel)
-    RADIO[chat_id] = {"msg": card, "stream": stream, "name": name, "track": track, "last": _caption(name, track)}
+    RADIO[chat_id] = {"msg": card, "stream": stream, "name": name, "track": track,
+                      "last": _caption(name, track), "card": card_img}
+
+
+async def replay_radio_at_gain(chat_id, vol):
+    """Re-tune the current radio station at the given gain (0-… , 1.0 = 100%),
+    preserving the still-image video card. Returns False if not on radio."""
+    st = RADIO.get(chat_id)
+    if not st:
+        return False
+    af = f"--audio ---mid -af volume={max(0.0, vol):.3f}"
+    card = st.get("card")
+    if card:
+        await call_py.play(chat_id, MediaStream(
+            card, audio_path=st["stream"],
+            video_parameters=VideoQuality.SD_480p, audio_parameters=AudioQuality.HIGH,
+            ffmpeg_parameters=af,
+        ))
+    else:
+        await call_py.play(chat_id, MediaStream(
+            st["stream"], video_flags=MediaStream.Flags.IGNORE, ffmpeg_parameters=af,
+        ))
+    return True
 
 
 async def radio_updater():

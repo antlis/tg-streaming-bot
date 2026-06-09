@@ -6,7 +6,7 @@ from driver.decorators import authorized_users_only
 from driver.filters import command, other_filters
 import random
 from driver.queues import QUEUE, clear_queue, get_queue, is_loop, set_loop
-from driver.utils import skip_current_song, skip_item, can_manage_vc
+from driver.utils import skip_current_song, skip_item, can_manage_vc, replay_at_gain
 from config import BOT_USERNAME, GROUP_SUPPORT, IMG_3, UPDATES_CHANNEL
 from pyrogram.enums import ChatMembersFilter
 from pyrogram.types import (
@@ -202,10 +202,10 @@ async def mute(client, m: Message):
     chat_id = m.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.mute(chat_id)
-            await m.reply(
-                "🔇 **Userbot muted.**\n\n• **To unmute the userbot, use the**\n» /unmute command."
-            )
+            # mute = master volume 0 (re-feed), not a media-layer mute — keeps the
+            # stream active so muting a video doesn't make Telegram blur it.
+            await replay_at_gain(chat_id, 0)
+            await m.reply("🔇 **Muted** (video stays sharp). » /unmute to restore.")
         except Exception as e:
             await m.reply(f"🚫 **error:**\n\n`{e}`")
     else:
@@ -220,10 +220,9 @@ async def unmute(client, m: Message):
     chat_id = m.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.unmute(chat_id)
-            await m.reply(
-                "🔊 **Userbot unmuted.**\n\n• **To mute the userbot, use the**\n» /mute command."
-            )
+            vol = VOLUME.get(chat_id, 100)
+            await replay_at_gain(chat_id, vol)
+            await m.reply(f"🔊 **Unmuted** ({vol}%). » /mute to silence.")
         except Exception as e:
             await m.reply(f"🚫 **error:**\n\n`{e}`")
     else:
@@ -318,8 +317,8 @@ async def cbmute(_, query: CallbackQuery):
     chat_id = query.message.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.mute(chat_id)
-            await query.answer("🔇 muted")
+            await query.answer("🔇 muting…")
+            await replay_at_gain(chat_id, 0)
         except Exception as e:
             await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
     else:
@@ -336,8 +335,9 @@ async def cbunmute(_, query: CallbackQuery):
     chat_id = query.message.chat.id
     if chat_id in QUEUE:
         try:
-            await call_py.unmute(chat_id)
-            await query.answer("🔊 unmuted")
+            vol = VOLUME.get(chat_id, 100)
+            await query.answer(f"🔊 {vol}% — re-buffering…")
+            await replay_at_gain(chat_id, vol)
         except Exception as e:
             await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
     else:
@@ -349,20 +349,24 @@ async def cbunmute(_, query: CallbackQuery):
 )
 @authorized_users_only
 async def change_volume(client, m: Message):
-    range = m.command[1]
     chat_id = m.chat.id
-    if chat_id in QUEUE:
-        try:
-            vol = max(0, min(200, int(range)))
-            await call_py.change_volume_call(chat_id, volume=vol)
-            VOLUME[chat_id] = vol
-            await m.reply(
-                f"✅ **volume set to** `{vol}`%"
-            )
-        except Exception as e:
-            await m.reply(f"🚫 **error:**\n\n`{e}`")
-    else:
-        await m.reply("❌ **nothing in streaming**")
+    if len(m.command) < 2:
+        return await m.reply("» **/volume 0-200**")
+    if chat_id not in QUEUE:
+        return await m.reply("❌ **nothing in streaming**")
+    try:
+        vol = max(0, min(200, int(m.command[1])))
+    except ValueError:
+        return await m.reply("» **/volume 0-200**")
+    try:
+        VOLUME[chat_id] = vol
+        ok = await replay_at_gain(chat_id, vol)
+        if ok:
+            await m.reply(f"✅ **volume set to** `{vol}`% _(brief re-buffer)_")
+        else:
+            await m.reply("❌ couldn't apply volume — nothing is playing.")
+    except Exception as e:
+        await m.reply(f"🚫 **error:**\n\n`{e}`")
 
 
 async def _step_volume(_, query: CallbackQuery, delta: int):
@@ -376,9 +380,9 @@ async def _step_volume(_, query: CallbackQuery, delta: int):
         return await query.answer("❌ nothing is currently streaming", show_alert=True)
     new_vol = max(0, min(200, VOLUME.get(chat_id, 100) + delta))
     try:
-        await call_py.change_volume_call(chat_id, volume=new_vol)
         VOLUME[chat_id] = new_vol
-        await query.answer(f"🔊 volume {new_vol}%")
+        await query.answer(f"🔊 volume {new_vol}% — re-buffering…")
+        await replay_at_gain(chat_id, new_vol)
     except Exception as e:
         await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
 

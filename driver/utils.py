@@ -36,6 +36,55 @@ def media_video(path, quality=720):
     )
 
 
+def _gain_params(vol, pos=0):
+    """py-tgcalls ffmpeg-parameter DSL string that applies an audio `volume`
+    filter *after* `-i` (--audio ---mid section) and optionally an input seek.
+    Two dashes select the section, three select the start/mid/end slot."""
+    af = f"--audio ---mid -af volume={max(0.0, vol):.3f}"
+    return f"-ss {int(pos)} {af}" if pos and pos > 0 else af
+
+
+def media_audio_gain(path, vol, pos=0):
+    return MediaStream(path, video_flags=MediaStream.Flags.IGNORE, ffmpeg_parameters=_gain_params(vol, pos))
+
+
+def media_video_gain(path, quality, vol, pos=0):
+    return MediaStream(
+        path,
+        audio_parameters=AudioQuality.HIGH,
+        video_parameters=_VQ.get(quality, VideoQuality.HD_720p),
+        ffmpeg_parameters=_gain_params(vol, pos),
+    )
+
+
+async def replay_at_gain(chat_id, vol_pct):
+    """Re-feed the current stream at vol_pct% loudness — the master-volume / mute
+    lever. Because it keeps the assistant continuously streaming (rather than
+    muting at the media layer), muting a video this way (vol 0) doesn't make
+    Telegram downgrade it to a blurry low-quality layer. Costs a brief re-buffer."""
+    vol = max(0, vol_pct) / 100.0
+    # Radio uses an image+audio_path stream; let radio rebuild it (keeps the card).
+    try:
+        from program.radio import replay_radio_at_gain
+        if await replay_radio_at_gain(chat_id, vol):
+            return True
+    except Exception:
+        pass
+    q = get_queue(chat_id)
+    if not q:
+        return False
+    src, typ, quality = q[0][1], q[0][3], q[0][4]
+    pos = 0
+    if not str(src).startswith("http"):   # seek local files back to the live spot
+        try:
+            pos = int(await call_py.time(chat_id))
+        except Exception:
+            pos = 0
+    stream = media_video_gain(src, quality, vol, pos) if typ == "Video" else media_audio_gain(src, vol, pos)
+    await call_py.play(chat_id, stream)
+    return True
+
+
 async def drop_stale_queue(chat_id) -> bool:
     """If we think a chat is queued but py-tgcalls has no live call for it
     (e.g. the stream silently died without firing a lifecycle event), clear the
