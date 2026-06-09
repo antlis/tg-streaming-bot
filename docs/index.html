@@ -103,7 +103,7 @@
       <div class="card"><div class="ico">📻</div><h3>Internet radio</h3><p>Dozens of built-in stations with the live now-playing track shown on the video feed.</p></div>
       <div class="card"><div class="ico">📼</div><h3>Recording</h3><p>Record the radio or a video stream to a voice/video message — stop anytime, with a live tracklist.</p></div>
       <div class="card"><div class="ico">📁</div><h3>Local library</h3><p>Browse and play your own media folders, with audio-track and subtitle selection at play time.</p></div>
-      <div class="card"><div class="ico">🎛️</div><h3>Full controls</h3><p>Pause, resume, skip, seek, volume, loop, shuffle, queue — plus an inline control panel.</p></div>
+      <div class="card"><div class="ico">🎛️</div><h3>Full controls</h3><p>Pause, skip, seek (+ 25/50/75% jumps), master volume, mute, loop, shuffle, queue, and 📸 screenshots — all from one inline panel or <code>/info</code>.</p></div>
       <div class="card"><div class="ico">⚡</div><h3>Hardware transcoding</h3><p>VAAPI GPU or CPU transcoding handles HEVC/MKV and anything the stream engine can't take raw.</p></div>
       <div class="card"><div class="ico">🔁</div><h3>Self-healing</h3><p>Auto-reconnects after a drop, resumes the last track after a restart, and leaves when idle.</p></div>
     </div>
@@ -130,8 +130,8 @@
         <h4>Control</h4>
         <ul>
           <li><code>/pause</code> <code>/resume</code> <code>/skip</code> <code>/stop</code></li>
-          <li><code>/seek 12:30</code> — jump to a time</li>
-          <li><code>/volume 1-200</code></li>
+          <li><code>/seek 12:30</code> — jump (or 0/25/50/75% buttons)</li>
+          <li><code>/volume 0-200</code> — master volume · mute</li>
           <li><code>/loop</code> <code>/shuffle</code> <code>/clear</code></li>
           <li><code>/info</code> — now playing + controls</li>
         </ul>
@@ -139,8 +139,8 @@
       <div>
         <h4>Capture &amp; setup</h4>
         <ul>
-          <li><code>/record</code> — record audio/video</li>
-          <li><code>/stoprec</code> — stop &amp; send</li>
+          <li><code>/record</code> · <code>/stoprec</code> — record audio/video</li>
+          <li><code>/screenshot</code> — grab the current frame</li>
           <li><code>/song</code> · <code>/video</code> — download</li>
           <li><code>/userbotjoin</code> · <code>/reload</code></li>
           <li><code>/alive</code> · <code>/ping</code></li>
