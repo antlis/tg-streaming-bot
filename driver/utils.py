@@ -1,10 +1,11 @@
 import os
+import re
 import asyncio
 import logging
 from time import time
 from config import DOWNLOADS_CACHE_LIMIT_MB, ASSISTANT_NAME
 from driver.clients import bot, call_py, user
-from driver.queues import QUEUE, clear_queue, get_queue, pop_an_item, is_loop
+from driver.queues import QUEUE, clear_queue, get_queue, pop_an_item, is_loop, is_autoplay, add_to_queue
 from pytgcalls import filters as call_filters
 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, ChatUpdate, StreamEnded
 from pyrogram.enums import ChatMemberStatus
@@ -415,6 +416,65 @@ async def chat_update_handler(_, update):
     prune_downloads()
 
 
+# ── Auto-DJ ──────────────────────────────────────────────────────────
+_RECENT = {}  # chat_id -> recently autoplayed video ids (avoid repeats)
+
+
+def _yt_id(url):
+    m = re.search(r"(?:v=|youtu\.be/|/shorts/)([0-9A-Za-z_-]{11})", str(url))
+    return m.group(1) if m else None
+
+
+async def _related_ids(vid):
+    """YouTube Mix (autoplay radio) candidates for a video: [(id, title), …]."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "yt-dlp", "--no-warnings", "--flat-playlist", "--playlist-items", "2-15",
+            "--extractor-args", "youtube:player_client=android_vr",
+            "--print", "%(id)s\t%(title)s",
+            f"https://www.youtube.com/watch?v={vid}&list=RD{vid}",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), 30)
+    except Exception:
+        return []
+    res = []
+    for line in out.decode(errors="ignore").splitlines():
+        if "\t" in line:
+            i, t = line.split("\t", 1)
+            if len(i) == 11:
+                res.append((i, t))
+    return res
+
+
+async def _autoplay_next(chat_id):
+    """If the current track is a YouTube source, fetch a related track (the YouTube
+    Mix) and append it to the queue as audio. Returns True if one was queued."""
+    q = get_queue(chat_id)
+    if not q:
+        return False
+    vid = _yt_id(q[0][2])
+    if not vid:
+        return False  # not a YouTube source — can't find a related track
+    recent = _RECENT.setdefault(chat_id, [])
+    cands = [(i, t) for i, t in await _related_ids(vid) if i != vid and i not in recent]
+    from program.music import ytdl as audio_dl  # lazy import: avoid a cycle
+    for cid, title in cands:
+        link = f"https://www.youtube.com/watch?v={cid}"
+        try:
+            ok, path = await audio_dl("bestaudio", link)
+        except Exception:
+            ok = 0
+        if ok == 0:
+            continue
+        add_to_queue(chat_id, title[:70], path, link, "Audio", 0)
+        recent.append(cid)
+        del recent[:-30]
+        await bot.send_message(chat_id, f"🎶 **Auto-DJ:** {title[:60]}")
+        return True
+    return False
+
+
 # NB: filters are classes — register an INSTANCE (stream_end()), not the class.
 # Scope to the audio track so a video ending doesn't fire the skip twice.
 @call_py.on_update(call_filters.stream_end(StreamEnded.Type.AUDIO))
@@ -432,6 +492,14 @@ async def stream_end_handler(_, update):
                 return
             except Exception:
                 pass
+    # Auto-DJ: before the queue runs dry, line up a related track so playback
+    # keeps going. Additive + fail-safe — if it can't, we just advance as usual.
+    q = get_queue(chat_id)
+    if is_autoplay(chat_id) and q and len(q) == 1:
+        try:
+            await _autoplay_next(chat_id)
+        except Exception:
+            log.warning("autoplay failed in %s", chat_id)
     log.info("stream ended in %s — advancing queue", chat_id)
     op = await skip_current_song(chat_id)
     if op == 1:

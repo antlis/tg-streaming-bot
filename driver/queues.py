@@ -4,8 +4,9 @@ import json
 from config import MAX_QUEUE_SIZE
 
 QUEUE = {}
-RESUME = {}  # last track + playback position per chat (for /continue)
-LOOP = {}    # chat_id -> True when the current track should repeat on end
+RESUME = {}    # last track + playback position per chat (for /continue)
+LOOP = {}      # chat_id -> True when the current track should repeat on end
+AUTOPLAY = {}  # chat_id -> True when auto-DJ should queue a related track at the end
 
 
 def set_loop(chat_id, on):
@@ -17,6 +18,17 @@ def set_loop(chat_id, on):
 
 def is_loop(chat_id):
     return LOOP.get(chat_id, False)
+
+
+def set_autoplay(chat_id, on):
+    if on:
+        AUTOPLAY[chat_id] = True
+    else:
+        AUTOPLAY.pop(chat_id, None)
+
+
+def is_autoplay(chat_id):
+    return AUTOPLAY.get(chat_id, False)
 
 # RESUME is persisted to the downloads volume so /continue still works after a
 # bot restart/crash. (QUEUE isn't persisted — the voice-chat connection is gone

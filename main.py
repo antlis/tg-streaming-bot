@@ -33,6 +33,7 @@ BOT_COMMANDS = [
     BotCommand("continue", "resume the last track from where it stopped"),
     BotCommand("skip", "skip to the next track (admin)"),
     BotCommand("loop", "toggle repeat of the current track (admin)"),
+    BotCommand("autoplay", "auto-DJ: keep playing related tracks when the queue ends"),
     BotCommand("shuffle", "shuffle the upcoming queue (admin)"),
     BotCommand("clear", "clear upcoming tracks, keep current (admin)"),
     BotCommand("stop", "stop and leave the voice chat (admin)"),

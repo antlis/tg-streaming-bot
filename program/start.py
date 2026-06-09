@@ -140,7 +140,7 @@ async def help_cmd(client: Client, message: Message):
         "• `/pause` `/resume` `/skip` `/stop`\n"
         "• `/seek 12:30` — jump to a time · `/continue` — resume after a drop\n"
         "• `/vmute` `/vunmute` · `/volume 1-200`\n"
-        "• `/loop` `/shuffle` `/clear`\n"
+        "• `/loop` `/shuffle` `/clear` · `/autoplay` — auto-DJ related tracks\n"
         "• `/info` — now playing + controls (seek %, volume, 📸, record)\n"
         "• `/screenshot` — grab the current video frame · `/playlist` — the queue\n\n"
         "**⚙️ Setup / status**\n"

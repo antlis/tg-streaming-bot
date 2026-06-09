@@ -5,7 +5,7 @@ from pyrogram import Client, filters
 from driver.decorators import authorized_users_only
 from driver.filters import command, other_filters
 import random
-from driver.queues import QUEUE, clear_queue, get_queue, is_loop, set_loop
+from driver.queues import QUEUE, clear_queue, get_queue, is_loop, set_loop, is_autoplay, set_autoplay
 import os
 
 from driver.utils import (
@@ -68,6 +68,19 @@ async def loop_cmd(client, m: Message):
     set_loop(chat_id, on)
     await m.reply("🔁 **Loop ON** — the current track will repeat when it ends." if on
                   else "➡️ **Loop OFF**")
+
+
+@Client.on_message(command(["autoplay", f"autoplay@{BOT_USERNAME}", "autodj"]) & other_filters)
+@authorized_users_only
+async def autoplay_cmd(client, m: Message):
+    chat_id = m.chat.id
+    on = not is_autoplay(chat_id)
+    set_autoplay(chat_id, on)
+    await m.reply(
+        "🔮 **Auto-DJ ON** — when the queue runs out I'll keep playing related "
+        "YouTube tracks. (Stops when the voice chat empties.)" if on
+        else "⏏️ **Auto-DJ OFF**"
+    )
 
 
 @Client.on_message(command(["shuffle", f"shuffle@{BOT_USERNAME}"]) & other_filters)

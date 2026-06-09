@@ -11,6 +11,7 @@ Telegram bot that streams **music & video into group voice chats**, built with [
 - **Screenshot** — grab the current video frame to the chat
 - **Full controls** — pause / resume / skip / seek, **master volume**, mute, loop / shuffle / clear, seek-to-% buttons and a queue — one inline now-playing panel plus `/info`
 - **Hardware transcoding** (VAAPI) or CPU for HEVC/MKV sources
+- **Auto-DJ** (`/autoplay`) — keep playing related tracks when the queue runs out · **SponsorBlock** to skip sponsor/intro segments
 - **Self-healing** — auto-reconnect on drops, resume after a restart, idle auto-leave
 - Per-user **rate limiting** + a **max-queue** cap; everything env-configured for self-hosting
 
@@ -68,6 +69,7 @@ Two Telegram identities are required:
 | `IDLE_LEAVE_MINUTES` | — | leave the voice chat after N minutes with no listeners (default 10; 0 = never) |
 | `MAX_QUEUE_SIZE` | — | max upcoming tracks per chat (default 50; 0 = unlimited) |
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW` | — | per-user command rate limit (default 5 commands / 10s; sudo users exempt) |
+| `SPONSORBLOCK_REMOVE` | — | comma-separated SponsorBlock categories to cut from YouTube downloads (e.g. `sponsor,selfpromo,music_offtopic`); empty = off |
 | `COMMAND_PREFIXES` | — | accepted command prefixes (default `/ ! .`) |
 | `ASSISTANT_NAME` | — | assistant @username (without @), used in messages |
 | `OWNER_NAME` / `ALIVE_NAME` | — | owner link & name for `/start` and `/alive`; empty = hidden |
@@ -90,7 +92,7 @@ Two Telegram identities are required:
 | `/pause` `/resume` `/skip` `/stop` | playback control (admins) |
 | `/seek 12:30` · `/continue` | jump to a time / resume after a drop |
 | `/volume 0-200` · `/vmute` `/vunmute` | master volume / mute (applied to the stream, heard by everyone) |
-| `/loop` `/shuffle` `/clear` | queue modes (admins) |
+| `/loop` `/shuffle` `/clear` · `/autoplay` | queue modes · auto-DJ related tracks (admins) |
 | `/info` · `/playlist` | now-playing panel with controls / the queue |
 | `/song <query>` · `/video <query>` | download instead of stream |
 | `/userbotjoin` `/userbotleave` · `/reload` | assistant join / leave · refresh admin cache |
