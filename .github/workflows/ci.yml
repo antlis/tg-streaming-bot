@@ -1,0 +1,18 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Byte-compile all sources (syntax check)
+        run: python -m compileall -q config.py main.py program driver
+      - name: Lint for showstopper errors
+        run: |
+          pip install --quiet flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics

@@ -1,7 +1,7 @@
 import os
 import hashlib
 
-from config import BOT_USERNAME, LIBRARY_ROOT, LIBRARY_CATEGORIES
+from config import BOT_USERNAME, LIBRARY_ROOT, LIBRARY_CATEGORIES, MAX_QUEUE_SIZE
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue
 from driver.clients import call_py
@@ -198,6 +198,8 @@ async def _start_library_video(c, msg, chat_id, name, streamable_src, status=Non
     status = status or msg
     if chat_id in QUEUE:
         pos = add_to_queue(chat_id, name[:70], streamable_src, streamable_src, "Video", 720)
+        if pos == -1:
+            return await status.edit(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
         return await status.edit(f"💡 **Queued #{pos}:** `{name[:60]}`", reply_markup=control_panel)
     try:
         streamable = await prepare_for_stream(streamable_src, status)
@@ -251,6 +253,8 @@ async def lib_go_cb(c: Client, query: CallbackQuery):
     if chat_id in QUEUE:
         # busy: queue the original (default tracks) — selection applies to immediate plays
         pos = add_to_queue(chat_id, name[:70], sel["src"], sel["src"], "Video", 720)
+        if pos == -1:
+            return await query.edit_message_text(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
         return await query.edit_message_text(f"💡 **Queued #{pos}:** `{name[:60]}`", reply_markup=control_panel)
     try:
         await query.edit_message_text(f"🎬 preparing `{name[:50]}`…")
@@ -291,6 +295,8 @@ async def lplay(c: Client, m: Message):
     chat_id = m.chat.id
     if chat_id in QUEUE:
         pos = add_to_queue(chat_id, name[:70], path, path, "Video", 720)
+        if pos == -1:
+            return await m.reply(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
         return await m.reply(f"💡 **Queued #{pos}:** `{name[:60]}`", reply_markup=control_panel)
     status = await m.reply(f"🎬 preparing `{name[:50]}`…")
     try:

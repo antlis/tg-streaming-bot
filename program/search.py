@@ -4,6 +4,7 @@ from config import BOT_USERNAME
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue
 from driver.clients import call_py
+from config import MAX_QUEUE_SIZE
 from driver.utils import control_panel, media_audio, media_video, ensure_can_play
 from driver.transcode import prepare_for_stream
 from program.music import ytdl as _audio_dl
@@ -72,6 +73,8 @@ async def _play_choice(c, query, video):
         stream, typ, Q = media_audio(path), "Audio", 0
     if chat_id in QUEUE:
         pos = add_to_queue(chat_id, title[:70], path, url, typ, Q)
+        if pos == -1:
+            return await query.edit_message_text(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
         return await query.edit_message_text(
             f"💡 **Queued #{pos}:** [{title[:50]}]({url}) · `{typ}`",
             reply_markup=control_panel, disable_web_page_preview=True,

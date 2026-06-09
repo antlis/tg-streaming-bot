@@ -1,6 +1,8 @@
 import os
 import json
 
+from config import MAX_QUEUE_SIZE
+
 QUEUE = {}
 RESUME = {}  # last track + playback position per chat (for /continue)
 LOOP = {}    # chat_id -> True when the current track should repeat on end
@@ -45,6 +47,10 @@ def load_resume():
 def add_to_queue(chat_id, songname, link, ref, type, quality):
    if chat_id in QUEUE:
       chat_queue = QUEUE[chat_id]
+      # QUEUE[chat_id][0] is the now-playing item; the rest are upcoming. Cap the
+      # upcoming count at MAX_QUEUE_SIZE; return -1 so the caller can say so.
+      if MAX_QUEUE_SIZE and len(chat_queue) > MAX_QUEUE_SIZE:
+         return -1
       chat_queue.append([songname, link, ref, type, quality])
       return int(len(chat_queue)-1)
    else:

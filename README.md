@@ -64,7 +64,7 @@ Two Telegram identities are required:
 | `OWNER_NAME` / `ALIVE_NAME` | — | owner link & name for `/start` and `/alive`; empty = hidden |
 | `GROUP_SUPPORT` / `UPDATES_CHANNEL` | — | username or `+invitehash` for the Group/Channel buttons; empty = hidden |
 | `ALIVE_IMG`, `IMG_1`–`IMG_4` | — | card images (URL or file path); bundled placeholder by default |
-| `UPSTREAM_REPO` | — | your fork's git URL (used by `/update` and the Source Code button) |
+| `UPSTREAM_REPO` | — | your repo's git URL (shown as the "Source Code" button on `/start`) |
 | `PROXY_*` | — | optional proxy for Telegram signaling |
 
 ## 🛠 Commands

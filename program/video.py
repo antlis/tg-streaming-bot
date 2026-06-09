@@ -4,7 +4,7 @@ import asyncio
 import subprocess
 from time import time
 
-from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2
+from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2, MAX_QUEUE_SIZE
 from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
@@ -228,6 +228,8 @@ async def vplay(c: Client, m: Message):
 
             if chat_id in QUEUE:
                 pos = add_to_queue(chat_id, songname, dl, link, "Video", Q)
+                if pos == -1:
+                    return await loser.edit(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
                 await loser.delete()
                 requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
                 await m.reply_photo(
@@ -288,6 +290,8 @@ async def vplay(c: Client, m: Message):
                             pos = add_to_queue(
                                 chat_id, songname, ytlink, url, "Video", Q
                             )
+                            if pos == -1:
+                                return await loser.edit(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
                             await loser.delete()
                             requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
                             await m.reply_photo(
@@ -344,6 +348,8 @@ async def vplay(c: Client, m: Message):
                 else:
                     if chat_id in QUEUE:
                         pos = add_to_queue(chat_id, songname, ytlink, url, "Video", Q)
+                        if pos == -1:
+                            return await loser.edit(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
                         await loser.delete()
                         requester = (
                             f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
@@ -477,6 +483,8 @@ async def vstream(c: Client, m: Message):
         else:
             if chat_id in QUEUE:
                 pos = add_to_queue(chat_id, "Live Stream", livelink, link, "Video", Q)
+                if pos == -1:
+                    return await loser.edit(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
                 await loser.delete()
                 requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
                 await m.reply_photo(

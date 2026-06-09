@@ -6,7 +6,7 @@ import asyncio
 import subprocess
 from time import time
 
-from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2
+from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2, MAX_QUEUE_SIZE
 from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
@@ -217,6 +217,8 @@ async def play(c: Client, m: Message):
                 songname = "Audio"
             if chat_id in QUEUE:
                 pos = add_to_queue(chat_id, songname, dl, link, "Audio", 0)
+                if pos == -1:
+                    return await suhu.edit(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
                 await suhu.delete()
                 await m.reply_photo(
                     photo=f"{IMG_1}",
@@ -268,6 +270,8 @@ async def play(c: Client, m: Message):
                             pos = add_to_queue(
                                 chat_id, songname, ytlink, url, "Audio", 0
                             )
+                            if pos == -1:
+                                return await suhu.edit(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
                             await suhu.delete()
                             requester = f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
                             await m.reply_photo(
@@ -319,6 +323,8 @@ async def play(c: Client, m: Message):
                 else:
                     if chat_id in QUEUE:
                         pos = add_to_queue(chat_id, songname, ytlink, url, "Audio", 0)
+                        if pos == -1:
+                            return await suhu.edit(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
                         await suhu.delete()
                         requester = (
                             f"[{m.from_user.first_name}](tg://user?id={m.from_user.id})"
