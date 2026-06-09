@@ -506,6 +506,16 @@ async def radio_tune(c: Client, query: CallbackQuery):
         clear_queue(chat_id)  # radio takes over — it's a single live stream
         add_to_queue(chat_id, name[:70], stream, url, "Audio", 0)
     except Exception as e:
+        msg = str(e)
+        if "CreateGroupCall" in msg or "CHAT_ADMIN_REQUIRED" in msg:
+            return await query.edit_message_text(
+                "🚫 **No voice chat is open, and I can't start one here.**\n\n"
+                "Starting a voice chat must be done by the **assistant account**, which "
+                "isn't an admin in this group. Either:\n"
+                "• **start the voice chat manually** first, then try again, or\n"
+                "• make the **assistant an admin** (with *Manage video chats*), "
+                "then `/userbotjoin` and retry."
+            )
         return await query.edit_message_text(f"🚫 error: `{e}`")
     # now-playing photo card, refreshed by radio_updater()
     track = (await asyncio.to_thread(_icy_metadata, stream)).get("title")
