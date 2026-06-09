@@ -275,9 +275,14 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
         pre += ["-ss", str(int(pos)), "-re"]
     if is_video:
         out = os.path.join("downloads", f"rec_{chat_id}.mp4")
-        # The streamed source is already H.264/AAC so copy is instant & lossless;
-        # fragmented mp4 stays playable even if the stop kills ffmpeg mid-write.
-        args = ["-i", url, "-t", str(secs), "-c", "copy",
+        # Copy the video (fast, lossless) but always re-encode audio to AAC:
+        # library files are often MKV with E-AC3 / other audio that can't be muxed
+        # into mp4 via copy ("Cannot write moov atom before EAC3 packets parsed").
+        # Map just the first video+audio so extra audio / subtitle tracks don't
+        # break the mux. Fragmented mp4 stays valid if the stop kills ffmpeg early.
+        args = ["-i", url, "-t", str(secs),
+                "-map", "0:v:0", "-map", "0:a:0",
+                "-c:v", "copy", "-c:a", "aac", "-b:a", "160k",
                 "-movflags", "+frag_keyframe+empty_moov+default_base_moof", out]
     else:
         out = os.path.join("downloads", f"rec_{chat_id}.ogg")
