@@ -220,8 +220,8 @@ def _dur(sec):
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
-def _rec_caption(name, tracks, secs):
-    cap = f"🎙 **{name[:60]}** · {_dur(secs)}"
+def _rec_caption(name, tracks, secs, icon="🎙"):
+    cap = f"{icon} **{name[:60]}** · {_dur(secs)}"
     if tracks:
         cap += "\n\n**Tracklist:**\n" + "\n".join(f"{i + 1}. {t}" for i, t in enumerate(tracks))
     return cap[:1024]
@@ -240,33 +240,48 @@ async def record_cmd(c: Client, m: Message):
     if not q:
         return await m.reply("❌ nothing is playing to record.")
     name, url, typ = q[0][0], q[0][1], q[0][3]
-    if typ == "Video":
-        return await m.reply("🎙 recording is for music / radio (audio) only.")
+    is_video = (typ == "Video")
+    is_http = str(url).startswith("http")
     secs = RECORD_MAX
     if len(m.command) > 1:
         try:
             secs = max(1, min(RECORD_MAX, int(m.command[1])))
         except ValueError:
             pass
-    out = os.path.join("downloads", f"rec_{chat_id}.ogg")
+    # Local files: start at the current playback position and pace at realtime
+    # (-re) so "stop" captures exactly what you've watched/heard since you began.
+    # Live http streams are already realtime, so neither flag is needed.
     pre = []
-    if not str(url).startswith("http"):
+    if not is_http:
         try:
-            pre = ["-ss", str(int(await call_py.time(chat_id)))]
+            pre += ["-ss", str(int(await call_py.time(chat_id)))]
         except Exception:
-            pre = []
+            pass
+        pre += ["-re"]
+    if is_video:
+        out = os.path.join("downloads", f"rec_{chat_id}.mp4")
+        # The streamed source is already H.264/AAC so copy is instant & lossless;
+        # fragmented mp4 stays playable even if the stop kills ffmpeg mid-write.
+        args = ["-i", url, "-t", str(secs), "-c", "copy",
+                "-movflags", "+frag_keyframe+empty_moov+default_base_moof", out]
+    else:
+        out = os.path.join("downloads", f"rec_{chat_id}.ogg")
+        args = ["-i", url, "-t", str(secs), "-vn", "-ac", "1",
+                "-c:a", "libopus", "-b:a", "64k", out]
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-y", "-nostdin", *pre, "-i", url, "-t", str(secs),
-        "-vn", "-ac", "1", "-c:a", "libopus", "-b:a", "64k", out,
+        "ffmpeg", "-y", "-nostdin", *pre, *args,
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
     )
-    track0 = (await asyncio.to_thread(_icy_metadata, url)).get("title") if str(url).startswith("http") else None
+    track0 = None
+    if not is_video and is_http:
+        track0 = (await asyncio.to_thread(_icy_metadata, url)).get("title")
     status = await m.reply(
-        f"🔴 **Recording** `{name[:50]}`…\nTap **⏹ Stop & send** when done (auto-stops at {_dur(secs)}).",
+        f"🔴 **Recording {'video' if is_video else 'audio'}** `{name[:50]}`…\n"
+        f"Tap **⏹ Stop & send** when done (auto-stops at {_dur(secs)}).",
         reply_markup=_rec_kb,
     )
     RECORDING[chat_id] = {
-        "proc": proc, "out": out, "name": name, "url": url,
+        "proc": proc, "out": out, "name": name, "url": url, "video": is_video,
         "tracks": [track0] if track0 else [], "stop": asyncio.Event(),
         "status": status, "start": time.time(),
     }
@@ -279,7 +294,7 @@ async def _record_watch(c: Client, chat_id):
         return
     proc, url = rec["proc"], rec["url"]
     while True:
-        if str(url).startswith("http"):
+        if not rec["video"] and str(url).startswith("http"):
             t = (await asyncio.to_thread(_icy_metadata, url)).get("title")
             if t and t not in rec["tracks"]:
                 rec["tracks"].append(t)
@@ -307,14 +322,22 @@ async def _record_watch(c: Client, chat_id):
     out = rec["out"]
     if not (os.path.exists(out) and os.path.getsize(out) > 0):
         return await c.send_message(chat_id, "🚫 recording failed.")
-    cap = _rec_caption(rec["name"], rec["tracks"], time.time() - rec["start"])
-    try:
-        await c.send_voice(chat_id, out, caption=cap)
-    except Exception:
+    secs = time.time() - rec["start"]
+    if rec["video"]:
+        cap = _rec_caption(rec["name"], [], secs, icon="🎬")
         try:
-            await c.send_audio(chat_id, out, caption=cap, title=rec["name"][:60])
+            await c.send_video(chat_id, out, caption=cap)
         except Exception as e:
             await c.send_message(chat_id, f"🚫 couldn't send the recording: `{e}`")
+    else:
+        cap = _rec_caption(rec["name"], rec["tracks"], secs)
+        try:
+            await c.send_voice(chat_id, out, caption=cap)
+        except Exception:
+            try:
+                await c.send_audio(chat_id, out, caption=cap, title=rec["name"][:60])
+            except Exception as e:
+                await c.send_message(chat_id, f"🚫 couldn't send the recording: `{e}`")
     try:
         os.remove(out)
     except OSError:

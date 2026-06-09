@@ -6,6 +6,8 @@ import asyncio
 import subprocess
 from time import time
 
+import logging
+
 from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2, MAX_QUEUE_SIZE
 from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
@@ -18,6 +20,9 @@ from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from youtubesearchpython import VideosSearch
+
+
+log = logging.getLogger(__name__)
 
 
 def ytsearch(query: str):
@@ -42,7 +47,7 @@ def ytsearch(query: str):
         thumbnail = f"https://i.ytimg.com/vi/{data['id']}/hqdefault.jpg"
         return [songname, url, duration, thumbnail]
     except Exception as e:
-        print(e)
+        log.warning("ytsearch failed: %s", e)
         return 0
 
 

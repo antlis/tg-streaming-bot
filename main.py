@@ -1,10 +1,14 @@
 import asyncio
 import logging
 
-# Keep WARNING/ERROR (real problems still surface); the concise [CALL] state
-# prints in driver/utils.py cover call lifecycle without the INFO spam.
-logging.basicConfig(level=logging.WARNING)
-logging.getLogger("pytgcalls").setLevel(logging.WARNING)
+# Libraries stay at WARNING (real problems still surface); our own packages log
+# at INFO so the concise call-lifecycle + startup lines show without lib spam.
+logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+for _noisy in ("pytgcalls", "pyrogram", "ntgcalls"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+for _ours in ("program", "driver", "__main__"):
+    logging.getLogger(_ours).setLevel(logging.INFO)
+log = logging.getLogger(__name__)
 
 from pytgcalls import idle
 from pyrogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats
@@ -22,7 +26,7 @@ BOT_COMMANDS = [
     BotCommand("library", "browse the local media library"),
     BotCommand("lplay", "play a local library file by name"),
     BotCommand("radio", "tune in to an internet radio station"),
-    BotCommand("record", "record the radio (tap stop or auto 1h) as a voice message"),
+    BotCommand("record", "record the current audio/video (tap stop or auto 1h)"),
     BotCommand("stoprec", "stop the current recording and send it"),
     BotCommand("pause", "pause playback (admin)"),
     BotCommand("resume", "resume playback (admin)"),
@@ -60,7 +64,7 @@ async def heartbeat():
 
 
 async def start_bot():
-    print("[INFO]: STARTING BOT CLIENT")
+    log.info("starting bot client")
     # If Telegram rate-limited the token login (e.g. after several restarts in
     # a row), wait the window out gracefully instead of crash-looping — which
     # would re-attempt the login and keep the flood going.
@@ -70,7 +74,7 @@ async def start_bot():
             break
         except FloodWait as e:
             wait = int(e.value) + 5
-            print(f"[WARN]: FloodWait on bot login — sleeping {wait}s")
+            log.warning("FloodWait on bot login — sleeping %ss", wait)
             await asyncio.sleep(wait)
     try:
         # set for the default scope plus groups/private explicitly, so the "/"
@@ -78,17 +82,17 @@ async def start_bot():
         await bot.set_bot_commands(BOT_COMMANDS)
         await bot.set_bot_commands(BOT_COMMANDS, scope=BotCommandScopeAllGroupChats())
         await bot.set_bot_commands(BOT_COMMANDS, scope=BotCommandScopeAllPrivateChats())
-        print("[INFO]: BOT COMMANDS REGISTERED")
+        log.info("bot commands registered")
     except Exception as e:
-        print(f"[WARN]: could not register bot commands: {e}")
+        log.warning("could not register bot commands: %s", e)
     load_resume()  # restore resume state so /continue survives restarts
     asyncio.ensure_future(heartbeat())
     asyncio.ensure_future(track_position())
     asyncio.ensure_future(radio_updater())
-    print("[INFO]: STARTING PYTGCALLS CLIENT")
+    log.info("starting pytgcalls client")
     await call_py.start()
     await idle()
-    print("[INFO]: STOPPING BOT & USERBOT")
+    log.info("stopping bot & userbot")
     await bot.stop()
 
 loop = asyncio.get_event_loop()

@@ -1,5 +1,6 @@
 import os
 import asyncio
+import logging
 from time import time
 from config import DOWNLOADS_CACHE_LIMIT_MB, ASSISTANT_NAME
 from driver.clients import bot, call_py, user
@@ -16,6 +17,7 @@ from pyrogram.types import (
 )
 from pyrogram import Client, filters
 
+log = logging.getLogger(__name__)
 
 _VQ = {720: VideoQuality.HD_720p, 480: VideoQuality.SD_480p, 360: VideoQuality.SD_360p}
 
@@ -45,7 +47,7 @@ async def drop_stale_queue(chat_id) -> bool:
     except Exception:
         live = False
     if not live:
-        print(f"[CALL]: {chat_id} queued but no live call — clearing stale queue")
+        log.info("%s queued but no live call — clearing stale queue", chat_id)
         clear_queue(chat_id)
         return True
     return False
@@ -232,7 +234,8 @@ async def skip_current_song(chat_id):
                     await call_py.play(chat_id, media_video(url, Q))
                 pop_an_item(chat_id)
                 return [songname, link, type]
-            except:
+            except Exception:
+                log.warning("failed to advance queue in %s — leaving call", chat_id)
                 await call_py.leave_call(chat_id)
                 clear_queue(chat_id)
                 return 2
@@ -249,7 +252,7 @@ async def skip_item(chat_id, h):
             chat_queue.pop(x)
             return songname
         except Exception as e:
-            print(e)
+            log.warning("skip_item failed: %s", e)
             return 0
     else:
         return 0
@@ -266,7 +269,7 @@ async def skip_item(chat_id, h):
 )
 async def chat_update_handler(_, update):
     chat_id = update.chat_id
-    print(f"[CALL]: chat update in {chat_id}: {update.status} — clearing queue")
+    log.info("chat update in %s: %s — clearing queue", chat_id, update.status)
     if chat_id in QUEUE:
         clear_queue(chat_id)
     prune_downloads()
@@ -285,11 +288,11 @@ async def stream_end_handler(_, update):
             try:
                 stream = media_video(head[1], head[4]) if head[3] == "Video" else media_audio(head[1])
                 await call_py.play(chat_id, stream)
-                print(f"[CALL]: stream ended in {chat_id} — looping current track")
+                log.info("stream ended in %s — looping current track", chat_id)
                 return
             except Exception:
                 pass
-    print(f"[CALL]: stream ended in {chat_id} — advancing queue")
+    log.info("stream ended in %s — advancing queue", chat_id)
     op = await skip_current_song(chat_id)
     if op == 1:
         await bot.send_message(chat_id, "✅ streaming end")

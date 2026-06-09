@@ -133,7 +133,7 @@ async def help_cmd(client: Client, message: Message):
         "• `/vplay <query|URL> [720|480|360] [mute]` — video (or reply to a video)\n"
         "• `/vstream <link>` — live / m3u8 / YouTube-live\n"
         "• `/library` · `/lplay <name>` — local media library\n"
-        "• `/radio` — stations · `/record` — record to voice msg (⏹ to stop) · `/stoprec`\n"
+        "• `/radio` — stations · `/record` — record audio/video (⏹ to stop) · `/stoprec`\n"
         "• `/search <query>` — pick from YouTube results (🎵 audio / 🎬 video)\n"
         "• `/song <query>` · `/video <query>` — download instead of stream\n\n"
         "**🎛 Controls** (admins)\n"
