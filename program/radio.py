@@ -230,24 +230,18 @@ def _rec_caption(name, tracks, secs, icon="🎙"):
 _rec_kb = InlineKeyboardMarkup([[InlineKeyboardButton("⏹ Stop & send", callback_data="recstop")]])
 
 
-@Client.on_message(command(["record", f"record@{BOT_USERNAME}", "rec"]) & other_filters)
-@authorized_users_only
-async def record_cmd(c: Client, m: Message):
-    chat_id = m.chat.id
+async def _begin_record(c: Client, chat_id, secs, send_status):
+    """Start a recording of whatever is playing. send_status(text, markup) sends
+    the status message and returns it — lets /record and the panel button share
+    this, replying inline vs sending into the chat respectively."""
     if chat_id in RECORDING:
-        return await m.reply("🔴 already recording — tap **⏹ Stop & send** (or /stoprec).")
+        return await send_status("🔴 already recording — tap **⏹ Stop & send** (or /stoprec).", None)
     q = get_queue(chat_id)
     if not q:
-        return await m.reply("❌ nothing is playing to record.")
+        return await send_status("❌ nothing is playing to record.", None)
     name, url, typ = q[0][0], q[0][1], q[0][3]
     is_video = (typ == "Video")
     is_http = str(url).startswith("http")
-    secs = RECORD_MAX
-    if len(m.command) > 1:
-        try:
-            secs = max(1, min(RECORD_MAX, int(m.command[1])))
-        except ValueError:
-            pass
     # Local files: start at the current playback position and pace at realtime
     # (-re) so "stop" captures exactly what you've watched/heard since you began.
     # Live http streams are already realtime, so neither flag is needed.
@@ -275,10 +269,10 @@ async def record_cmd(c: Client, m: Message):
     track0 = None
     if not is_video and is_http:
         track0 = (await asyncio.to_thread(_icy_metadata, url)).get("title")
-    status = await m.reply(
+    status = await send_status(
         f"🔴 **Recording {'video' if is_video else 'audio'}** `{name[:50]}`…\n"
         f"Tap **⏹ Stop & send** when done (auto-stops at {_dur(secs)}).",
-        reply_markup=_rec_kb,
+        _rec_kb,
     )
     RECORDING[chat_id] = {
         "proc": proc, "out": out, "name": name, "url": url, "video": is_video,
@@ -286,6 +280,38 @@ async def record_cmd(c: Client, m: Message):
         "status": status, "start": time.time(),
     }
     asyncio.ensure_future(_record_watch(c, chat_id))
+
+
+@Client.on_message(command(["record", f"record@{BOT_USERNAME}", "rec"]) & other_filters)
+@authorized_users_only
+async def record_cmd(c: Client, m: Message):
+    secs = RECORD_MAX
+    if len(m.command) > 1:
+        try:
+            secs = max(1, min(RECORD_MAX, int(m.command[1])))
+        except ValueError:
+            pass
+
+    async def send(text, markup=None):
+        return await m.reply(text, reply_markup=markup)
+
+    await _begin_record(c, m.chat.id, secs, send)
+
+
+@Client.on_callback_query(filters.regex(r"^recstart$"))
+async def recstart_cb(c: Client, query: CallbackQuery):
+    chat_id = query.message.chat.id
+    member = await c.get_chat_member(chat_id, query.from_user.id)
+    if not can_manage_vc(member):
+        return await query.answer("💡 admins (manage video chats) only", show_alert=True)
+    if chat_id in RECORDING:
+        return await query.answer("already recording — tap ⏹ Stop on the recording message", show_alert=True)
+    await query.answer("⏺ recording…")
+
+    async def send(text, markup=None):
+        return await c.send_message(chat_id, text, reply_markup=markup)
+
+    await _begin_record(c, chat_id, RECORD_MAX, send)
 
 
 async def _record_watch(c: Client, chat_id):

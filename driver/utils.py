@@ -143,6 +143,7 @@ control_panel = InlineKeyboardMarkup(
             InlineKeyboardButton("🔈", callback_data="cbunmute"),
         ],
         [
+            InlineKeyboardButton("⏺ Record", callback_data="recstart"),
             InlineKeyboardButton("🗑 Close", callback_data="cls"),
         ],
     ]
