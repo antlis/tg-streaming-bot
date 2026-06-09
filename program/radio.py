@@ -301,17 +301,20 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
         elif TRANSCODE_HWACCEL == "vaapi":
             # GPU encode: software-decode HEVC, upload, scale + encode on the GPU.
             # Keeps the CPU free so recording doesn't stutter the live stream.
+            # -bf 0 (no B-frames) avoids the reorder delay that otherwise leaves
+            # audio ~80ms ahead of the video.
             gopts = ["-vaapi_device", "/dev/dri/renderD128"]
             venc = ["-vf", "format=nv12,hwupload,scale_vaapi=w=-2:h=720",
-                    "-c:v", "h264_vaapi", "-qp", "24"]
+                    "-c:v", "h264_vaapi", "-qp", "24", "-bf", "0"]
             how = "vaapi h264"
         else:
             venc = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                    "-vf", "scale=-2:720", "-pix_fmt", "yuv420p"]
+                    "-vf", "scale=-2:720", "-pix_fmt", "yuv420p", "-bf", "0", "-fps_mode", "cfr"]
             how = "cpu h264"
         log.info("record %s: source video codec=%s (%s)", chat_id, vcodec or "?", how)
+        # -af aresample keeps the audio clock locked to the video (start at 0).
         args = ["-i", url, "-t", str(secs), "-map", "0:v:0", "-map", "0:a:0",
-                *venc, "-c:a", "aac", "-b:a", "160k",
+                *venc, "-af", "aresample=async=1:first_pts=0", "-c:a", "aac", "-b:a", "160k",
                 "-movflags", "+frag_keyframe+empty_moov+default_base_moof", out]
     else:
         out = os.path.join("downloads", f"rec_{chat_id}.ogg")
