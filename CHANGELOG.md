@@ -4,6 +4,20 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] — 2026-06-09
+### Added
+- **`/screenshot`** (and a 📸 button on the panel) — grab the current video frame and send it to the chat.
+- **Seek-to-% buttons** (0 / 25 / 50 / 75 %) on the now-playing panel.
+- **Record toggle** — the ⏺ panel button starts/stops a recording, and the recorder is reachable from the `/info` panel.
+- Internal version now tracks the release tags (shown in `/alive`).
+
+### Fixed
+- **Recording A/V sync** — re-encodes now drop B-frames and resample audio so the picture and sound line up (audio was ~80 ms ahead).
+- **Empty / 0:00 video recordings** — the seek is clamped inside the source, E-AC3 audio is re-encoded to AAC, HEVC/non-H.264 video is re-encoded to H.264, and the result is remuxed to faststart so Telegram plays it.
+- Volume / mute changes no longer restart the video from the beginning (absolute position is tracked across re-feeds).
+- Friendlier `/radio` error when no voice chat is open and the assistant can't start one.
+- `print()` / bare `except` replaced with proper logging.
+
 ## [1.2.0] — 2026-06-09
 ### Added
 - **GPU (VAAPI) encoding for recordings.** When `TRANSCODE_HWACCEL=vaapi`, a
@@ -51,6 +65,7 @@ group voice chats.
 - Self-healing — auto-reconnect on drops, resume after a restart, idle auto-leave.
 - One-command Docker deploy; everything configured via environment variables.
 
+[1.3.0]: https://github.com/antlis/tg-streaming-bot/releases/tag/v1.3.0
 [1.2.0]: https://github.com/antlis/tg-streaming-bot/releases/tag/v1.2.0
 [1.1.0]: https://github.com/antlis/tg-streaming-bot/releases/tag/v1.1.0
 [1.0.0]: https://github.com/antlis/tg-streaming-bot/releases/tag/v1.0.0
