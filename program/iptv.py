@@ -204,25 +204,35 @@ async def iptv_pick(c: Client, query: CallbackQuery):
     await query.answer(f"▶️ {name}")
     await query.message.edit(f"📺 **Tuning to** {label}…")
 
+    logo = ch.get("logo", "")
+
+    async def _send_card(caption: str):
+        """Delete the picker and send a photo card (or fall back to text)."""
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        if logo:
+            try:
+                await c.send_photo(chat_id, logo, caption=caption, reply_markup=control_panel)
+                return
+            except Exception:
+                pass
+        await c.send_message(chat_id, caption, reply_markup=control_panel)
+
     try:
         await drop_stale_queue(chat_id)
         if chat_id in QUEUE:
             pos = add_to_queue(chat_id, label, url, url, "Video", 0)
             if pos == -1:
                 return await query.message.edit(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
-            await query.message.edit(
-                f"💡 **Added to queue »** `{pos}`\n📺 **Channel:** {label}",
-                reply_markup=control_panel,
-            )
+            await _send_card(f"💡 **Added to queue »** `{pos}`\n📺 **Channel:** {label}")
         else:
             from driver.clients import call_py
             await call_py.play(chat_id, media_video(url))
             clear_queue(chat_id)
             add_to_queue(chat_id, label, url, url, "Video", 0)
-            await query.message.edit(
-                f"📺 **Now streaming:** {label}\n🔴 _Live IPTV_",
-                reply_markup=control_panel,
-            )
+            await _send_card(f"📺 **Now streaming:** {label}\n🔴 _Live IPTV_")
     except Exception as e:
         log.warning("IPTV: stream error for %s: %s", url, e)
         await query.message.edit(f"❌ **Stream failed:** `{e}`")
