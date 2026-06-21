@@ -26,18 +26,21 @@ log = logging.getLogger(__name__)
 
 def ytsearch(query: str):
     try:
-        if re.match(r"https?://(www\.|m\.)?(youtube\.com|youtu\.be)/", query.strip()):
-            # direct URL — the search lib can't parse URLs, so use yt-dlp for metadata
+        q = query.strip()
+        is_yt = bool(re.match(r"https?://(www\.|m\.)?(youtube\.com|youtu\.be)/", q))
+        if re.match(r"https?://", q):
+            # any direct URL — use yt-dlp for metadata (handles YouTube, Rutube, Vimeo, …)
             out = subprocess.run(
                 ["yt-dlp", "--no-warnings", "--skip-download",
-                 "--print", "%(title)s\x1f%(duration_string)s\x1f%(id)s", query],
+                 "--print", "%(title)s\x1f%(duration_string)s\x1f%(id)s\x1f%(thumbnail)s", q],
                 capture_output=True, text=True, timeout=90,
             ).stdout.strip().split("\x1f")
-            title = out[0] if out and out[0] else "YouTube"
+            title = out[0] if out and out[0] else q
             duration = out[1] if len(out) > 1 else ""
             vid = out[2] if len(out) > 2 and out[2] else ""
-            thumbnail = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg" if vid else ""
-            return [title, query.strip(), duration, thumbnail]
+            raw_thumb = out[3] if len(out) > 3 else ""
+            thumbnail = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg" if is_yt and vid else raw_thumb
+            return [title, q, duration, thumbnail]
         search = VideosSearch(query, limit=1).result()
         data = search["result"][0]
         songname = data["title"]
@@ -50,12 +53,29 @@ def ytsearch(query: str):
         return 0
 
 
+_YT_RE = re.compile(r"https?://(www\.|m\.)?(youtube\.com|youtu\.be)/")
+
+
 async def ytdl(link, status_msg=None):
-    # Download (DASH video+audio, merged) to a local file and return its path.
-    # YouTube 403s the progressive (itag 18) stream URL for direct ffmpeg
-    # streaming, so we download via yt-dlp (which picks working DASH formats)
-    # and stream the local file instead. If status_msg is given, it's edited
-    # with live download progress (throttled).
+    # For non-YouTube sites (e.g. Rutube) the formats are HLS-only muxed streams.
+    # Extract the best ≤720p stream URL and hand it to ffmpeg live instead of
+    # downloading the whole file. YouTube must be downloaded first (direct URLs 403).
+    if not _YT_RE.match(link):
+        proc = await asyncio.create_subprocess_exec(
+            "yt-dlp", "--no-warnings", "--no-playlist",
+            "-f", "best[height<=720]/best",
+            "--print", "%(url)s",
+            link,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode == 0:
+            url = stdout.decode(errors="ignore").strip()
+            if url:
+                return 1, url
+        err = stderr.decode(errors="ignore")[-400:]
+        return 0, (err or "stream URL extraction failed")
+
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
         "--no-warnings",
@@ -67,8 +87,8 @@ async def ytdl(link, status_msg=None):
         "download:PROG|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
         # android_vr client avoids YouTube's SABR-gating (the default clients
         # only offer the progressive itag-18 stream, which 403s).
-        "--extractor-args",
-        "youtube:player_client=android_vr",
+        *(["--extractor-args", "youtube:player_client=android_vr"]
+          if _YT_RE.match(link) else []),
         "--print",
         "after_move:filepath",
         # Prefer H.264 video + AAC(m4a) audio so the merge produces a universally

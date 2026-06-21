@@ -1,6 +1,7 @@
 
 
 from driver.queues import QUEUE, RESUME
+from driver.utils import can_manage_vc
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from config import (
