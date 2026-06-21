@@ -147,7 +147,9 @@ async def iptv_cmd(c: Client, m: Message):
         )
         return
 
-    status = await c.send_message(chat_id, "📺 **Searching IPTV channels…**")
+    thread_id = getattr(m, "message_thread_id", None)
+    status = await c.send_message(chat_id, "📺 **Searching IPTV channels…**",
+                                  message_thread_id=thread_id)
     channels = await _get_channels()
     if not channels:
         return await status.edit(
@@ -180,18 +182,28 @@ async def iptv_cmd(c: Client, m: Message):
 @Client.on_callback_query(filters.regex(r"^iptv:(\d+)$"))
 async def iptv_pick(c: Client, query: CallbackQuery):
     chat_id = query.message.chat.id
+    log.info("IPTV: pick callback chat=%s user=%s data=%s",
+             chat_id, getattr(query.from_user, "id", None), query.data)
+
+    # Anonymous admins have no from_user
+    if not query.from_user:
+        return await query.answer("Please use a regular user account, not an anonymous admin.", show_alert=True)
 
     a = await c.get_chat_member(chat_id, query.from_user.id)
     if not can_manage_vc(a):
-        return await query.answer(
-            "💡 only admins with manage video chats permission can do this!",
-            show_alert=True,
-        )
+        log.info("IPTV: user %s blocked — status=%s", query.from_user.id, a.status)
+        return await query.answer("💡 only admins with manage video chats permission", show_alert=True)
 
     idx = int(query.matches[0].group(1))
     results = _RESULTS.get(chat_id, [])
     if idx >= len(results):
-        return await query.answer("⚠️ results expired — search again", show_alert=True)
+        log.info("IPTV: results expired chat=%s idx=%s cache_len=%s", chat_id, idx, len(results))
+        # Edit the message so the user notices (popup alerts are easy to miss)
+        try:
+            await query.message.edit("⚠️ Search session expired — run `/iptv` again.")
+        except Exception:
+            await query.answer("⚠️ Session expired — run /iptv again.", show_alert=True)
+        return
 
     ch = results[idx]
     name, url = ch["name"], ch["url"]
@@ -199,43 +211,59 @@ async def iptv_pick(c: Client, query: CallbackQuery):
 
     ok, reason = await ensure_assistant_in_chat(c, chat_id)
     if not ok:
+        log.warning("IPTV: ensure_assistant_in_chat failed: %s", reason)
         return await query.answer(f"❌ {reason}"[:190], show_alert=True)
 
     await query.answer(f"▶️ {name}")
     await query.message.edit(f"📺 **Tuning to** {label}…")
 
     logo = ch.get("logo", "")
+    thread_id = getattr(query.message, "message_thread_id", None)
+    log.info("IPTV: %s selected channel %s url=%s thread=%s", query.from_user.id, label, url, thread_id)
 
-    async def _send_card(caption: str):
-        """Delete the picker and send a photo card (or fall back to text)."""
+    async def _finish(caption: str):
+        """Replace the picker with a photo card once the stream is confirmed started."""
         try:
             await query.message.delete()
         except Exception:
             pass
         if logo:
             try:
-                await c.send_photo(chat_id, logo, caption=caption, reply_markup=control_panel)
+                await c.send_photo(chat_id, logo, caption=caption, reply_markup=control_panel,
+                                   message_thread_id=thread_id)
                 return
-            except Exception:
-                pass
-        await c.send_message(chat_id, caption, reply_markup=control_panel)
+            except Exception as photo_err:
+                log.warning("IPTV: send_photo failed (%s), falling back to text", photo_err)
+        await c.send_message(chat_id, caption, reply_markup=control_panel,
+                             message_thread_id=thread_id)
 
+    async def _err(msg: str):
+        """Show error — edit the picker if it still exists, otherwise send a new message."""
+        log.warning("IPTV: error for %s: %s", label, msg)
+        try:
+            await query.message.edit(f"❌ **IPTV error:** {msg}")
+        except Exception:
+            await c.send_message(chat_id, f"❌ **IPTV error:** {msg}",
+                                 message_thread_id=thread_id)
+
+    from driver.clients import call_py
     try:
         await drop_stale_queue(chat_id)
         if chat_id in QUEUE:
             pos = add_to_queue(chat_id, label, url, url, "Video", 0)
             if pos == -1:
-                return await query.message.edit(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
-            await _send_card(f"💡 **Added to queue »** `{pos}`\n📺 **Channel:** {label}")
+                return await _err(f"queue is full (max {MAX_QUEUE_SIZE})")
+            log.info("IPTV: queued %s at pos %s", label, pos)
+            await _finish(f"💡 **Added to queue »** `{pos}`\n📺 **Channel:** {label}")
         else:
-            from driver.clients import call_py
+            log.info("IPTV: calling play() for %s", label)
             await call_py.play(chat_id, media_video(url))
             clear_queue(chat_id)
             add_to_queue(chat_id, label, url, url, "Video", 0)
-            await _send_card(f"📺 **Now streaming:** {label}\n🔴 _Live IPTV_")
+            log.info("IPTV: play() succeeded for %s", label)
+            await _finish(f"📺 **Now streaming:** {label}\n🔴 _Live IPTV_")
     except Exception as e:
-        log.warning("IPTV: stream error for %s: %s", url, e)
-        await query.message.edit(f"❌ **Stream failed:** `{e}`")
+        await _err(f"`{e}`")
 
 
 @Client.on_callback_query(filters.regex(r"^iptv_help$"))

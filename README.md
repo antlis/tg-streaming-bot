@@ -6,6 +6,7 @@ Telegram bot that streams **music & video into group voice chats**, built with [
 - **Music & video** into group voice chats — from YouTube (search **or** URL), an audio/video file posted in Telegram, or a live link (m3u8 / YouTube-live)
 - **`/search`** — pick from YouTube results (🎵 audio or 🎬 video) instead of auto-playing the first hit
 - **Internet radio** — dozens of built-in stations, with the live now-playing track shown on the video card
+- **Live TV (IPTV)** — search 50 000+ channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue by name and stream them live; channel logo shown when playing
 - **Local media library** — browse & play your own folders, with audio-track and subtitle selection
 - **Recording** — capture the radio/audio to a voice message or the video to an H.264 mp4 and upload it (toggle on/off, live tracklist)
 - **Screenshot** — grab the current video frame to the chat
@@ -86,6 +87,7 @@ Two Telegram identities are required:
 | `/vstream <link>` | stream a live link / m3u8 / YouTube live |
 | `/search <query>` | pick from YouTube results — 🎵 audio or 🎬 video |
 | `/radio` | internet radio — pick a station |
+| `/iptv <name>` | live TV — search the iptv-org catalogue (50 000+ channels) and stream; `/iptv` alone shows links to browse by country |
 | `/record [secs]` · `/stoprec` | record the current audio/video and send it (⏺ on the panel toggles; auto-stops at 1 h) |
 | `/library` · `/lplay <name>` | browse / play the local media library |
 | `/screenshot` | send a frame of the current video |
@@ -100,6 +102,7 @@ Two Telegram identities are required:
 
 ## Notes
 - YouTube playback **downloads first, then streams** (yt-dlp with the `android_vr` client; H.264+AAC mp4) — direct stream URLs are blocked by YouTube these days. Expect a short delay before playback starts.
+- **Non-YouTube URLs** (Rutube, Vimeo, IPTV m3u8, etc.) are extracted and streamed live — no download wait, but HLS tokens expire after ~30 minutes so very long sessions may need a seek/restart.
 - Large Telegram files also download fully before streaming — a progress bar is shown; big files just take a while.
 
 ## Running where Telegram is filtered (Reality VPN sidecar)
