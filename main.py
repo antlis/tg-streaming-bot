@@ -17,6 +17,7 @@ from driver.clients import call_py, bot
 from driver.queues import load_resume
 from program.resume import track_position
 from program.radio import radio_updater
+import program.iptv  # registers /iptv handlers
 
 BOT_COMMANDS = [
     BotCommand("play", "play music from YouTube, or reply to an audio"),
@@ -26,6 +27,7 @@ BOT_COMMANDS = [
     BotCommand("library", "browse the local media library"),
     BotCommand("lplay", "play a local library file by name"),
     BotCommand("radio", "tune in to an internet radio station"),
+    BotCommand("iptv", "search and stream live TV channels (iptv-org catalogue)"),
     BotCommand("record", "record the current audio/video (tap stop or auto 1h)"),
     BotCommand("stoprec", "stop the current recording and send it"),
     BotCommand("pause", "pause playback (admin)"),
