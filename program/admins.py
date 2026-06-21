@@ -39,7 +39,7 @@ VOLUME_STEP = 20
 @Client.on_message(command(["reload", f"reload@{BOT_USERNAME}"]) & other_filters)
 @authorized_users_only
 async def update_admin(client, message):
-    global admins
+
     new_admins = []
     async for u in client.get_chat_members(
         message.chat.id, filter=ChatMembersFilter.ADMINISTRATORS
