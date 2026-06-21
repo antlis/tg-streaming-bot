@@ -4,6 +4,16 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] — 2026-06-21
+### Added
+- **IPTV (`/iptv <name>`)** — search 50 000+ live TV channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and stream them live; channel logo shown when playing. `/iptv` with no args shows links to browse channels by country/category. Works in forum groups (posts to the correct topic).
+- **Non-YouTube URL support** in `/play` and `/vplay` — Rutube, Vimeo, and any other yt-dlp-supported site now work by extracting the stream URL and feeding it live to ffmpeg (no multi-GB download wait). YouTube continues to download first as before.
+
+### Fixed
+- `ytsearch()` no longer tries to do a YouTube keyword search when given a direct URL from a non-YouTube site (was returning "no results found").
+- `callback.py` was missing the `can_manage_vc` import (undefined name, F821).
+- Unused `global admins` declaration removed from `admins.py` (F824).
+
 ## [1.4.1] — 2026-06-09
 ### Changed
 - **Gapless Auto-DJ** — the next related track is now prefetched in the background while the current one is still playing, so it starts seamlessly instead of after a short fetch pause at the end of each track.
