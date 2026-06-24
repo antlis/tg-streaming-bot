@@ -28,7 +28,7 @@ BOT_COMMANDS = [
     BotCommand("lplay", "play a local library file by name"),
     BotCommand("radio", "tune in to an internet radio station"),
     BotCommand("iptv", "search and stream live TV channels (iptv-org catalogue)"),
-    BotCommand("record", "record the current audio/video (tap stop or auto 1h)"),
+    BotCommand("record", "record audio/video; /record 01:30 02:00 to clip a range"),
     BotCommand("stoprec", "stop the current recording and send it"),
     BotCommand("pause", "pause playback (admin)"),
     BotCommand("resume", "resume playback (admin)"),

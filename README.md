@@ -88,7 +88,7 @@ Two Telegram identities are required:
 | `/search <query>` | pick from YouTube results — 🎵 audio or 🎬 video |
 | `/radio` | internet radio — pick a station |
 | `/iptv <name>` | live TV — search the iptv-org catalogue (50 000+ channels) and stream; `/iptv` alone shows links to browse by country |
-| `/record [secs]` · `/stoprec` | record the current audio/video and send it (⏺ on the panel toggles; auto-stops at 1 h) |
+| `/record [duration]` · `/record START END` · `/stoprec` | record audio/video and send it (⏺ panel toggle); `duration` accepts `30m`, `1h`, `HH:MM:SS`; `START END` clips a specific range (e.g. `01:30:00 02:00:00`) — for local files/YouTube only; live streams use the duration and ignore the start offset |
 | `/library` · `/lplay <name>` | browse / play the local media library |
 | `/screenshot` | send a frame of the current video |
 | `/pause` `/resume` `/skip` `/stop` | playback control (admins) |

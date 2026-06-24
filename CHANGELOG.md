@@ -4,6 +4,12 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] — 2026-06-24
+### Added
+- **`/record START END`** — clip a specific time range from what's playing. Accepts `HH:MM:SS`, `MM:SS`, `Nh`/`Nm`/`Ns`, or plain seconds for both arguments (e.g. `/record 01:30:00 02:00:00` records 30 minutes starting at 1 h 30 m). Works for local files and downloaded YouTube tracks; for live HTTP streams (radio, IPTV) the start offset is ignored and only the duration (`END − START`) is used, with a note in the status message.
+- **Duration shorthand** for `/record` — e.g. `/record 30m` or `/record 1h` alongside the existing plain-seconds form.
+- **Ahead-of-playback warning** — when the requested start time is ahead of the current playback position (meaning yt-dlp may not have downloaded that far yet), the recording starts but the status message warns that the clip may be shorter than expected.
+
 ## [1.5.0] — 2026-06-21
 ### Added
 - **IPTV (`/iptv <name>`)** — search 50 000+ live TV channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue and stream them live; channel logo shown when playing. `/iptv` with no args shows links to browse channels by country/category. Works in forum groups (posts to the correct topic).

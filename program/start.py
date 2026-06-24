@@ -135,7 +135,7 @@ async def help_cmd(client: Client, message: Message):
         "• `/library` · `/lplay <name>` — local media library\n"
         "• `/radio` — internet radio stations\n"
         "• `/iptv <name>` — live TV (iptv-org catalogue, 50k+ channels) · `/iptv` for links\n"
-        "• `/record` — record audio/video (⏹ to stop) · `/stoprec`\n"
+        "• `/record [duration]` · `/record 01:30:00 02:00:00` — record or clip a range · `/stoprec`\n"
         "• `/search <query>` — pick from YouTube results (🎵 audio / 🎬 video)\n"
         "• `/song <query>` · `/video <query>` — download instead of stream\n\n"
         "**🎛 Controls** (admins)\n"

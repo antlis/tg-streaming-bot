@@ -252,6 +252,30 @@ def _dur(sec):
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
+def _parse_time(s: str):
+    """Parse a time string to int seconds. Accepts HH:MM:SS, MM:SS, Nh/Nm/Ns, or plain int."""
+    s = s.strip()
+    if ":" in s:
+        parts = s.split(":")
+        try:
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            if len(parts) == 2:
+                return int(parts[0]) * 60 + int(parts[1])
+        except ValueError:
+            pass
+        return None
+    if s and s[-1] in "hms":
+        try:
+            return int(s[:-1]) * {"h": 3600, "m": 60, "s": 1}[s[-1]]
+        except ValueError:
+            return None
+    try:
+        return int(s)
+    except ValueError:
+        return None
+
+
 def _rec_caption(name, tracks, secs, icon="🎙"):
     cap = f"{icon} **{name[:60]}** · {_dur(secs)}"
     if tracks:
@@ -262,10 +286,11 @@ def _rec_caption(name, tracks, secs, icon="🎙"):
 _rec_kb = InlineKeyboardMarkup([[InlineKeyboardButton("⏹ Stop & send", callback_data="recstop")]])
 
 
-async def _begin_record(c: Client, chat_id, secs, send_status):
+async def _begin_record(c: Client, chat_id, secs, send_status, start_secs=None):
     """Start a recording of whatever is playing. send_status(text, markup) sends
     the status message and returns it — lets /record and the panel button share
-    this, replying inline vs sending into the chat respectively."""
+    this, replying inline vs sending into the chat respectively.
+    start_secs: seek to this position before recording (local files only; ignored for live streams)."""
     if chat_id in RECORDING:
         return await send_status("🔴 already recording — tap **⏹ Stop & send** (or /stoprec).", None)
     q = get_queue(chat_id)
@@ -279,13 +304,24 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
     # Live http streams are already realtime, so neither flag is needed.
     pre = []
     gopts = []   # ffmpeg global opts before -i (e.g. -vaapi_device)
+    not_downloaded_yet = False
     if not is_http:
-        pos = await current_position(chat_id, url)
         dur = await _probe_duration(url)
-        # A seek past EOF yields an empty 0:00 file — clamp into the media, and
-        # never closer than `secs` from the end so there's something to capture.
-        if dur > 0:
-            pos = max(0, min(pos, int(dur) - 2))
+        if start_secs is not None:
+            pos = start_secs
+            if dur > 0:
+                if pos >= int(dur):
+                    return await send_status("❌ start time is beyond the end of the track.", None)
+                pos = min(pos, int(dur) - 2)
+            # Warn if the requested start is ahead of the playback head — yt-dlp
+            # downloads linearly, so that part of the file may not exist yet.
+            cur = await current_position(chat_id, url)
+            not_downloaded_yet = pos > cur + 5
+        else:
+            pos = await current_position(chat_id, url)
+            # A seek past EOF yields an empty 0:00 file — clamp into the media.
+            if dur > 0:
+                pos = max(0, min(pos, int(dur) - 2))
         log.info("record %s: video=%s pos=%ss dur=%ss", chat_id, is_video, pos, int(dur) if dur else "?")
         pre += ["-ss", str(int(pos)), "-re"]
     if is_video:
@@ -332,8 +368,17 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
     track0 = None
     if not is_video and is_http:
         track0 = (await asyncio.to_thread(_icy_metadata, url)).get("title")
+    kind = "video" if is_video else "audio"
+    if start_secs is not None and not is_http:
+        range_note = f"\n⏱ `{_dur(start_secs)}` → `{_dur(start_secs + secs)}`"
+        if not_downloaded_yet:
+            range_note += "\n⚠️ _Start is ahead of playback — file may not be downloaded that far yet._"
+    elif start_secs is not None:
+        range_note = f"\n_(start offset ignored for live streams — recording {_dur(secs)} from now)_"
+    else:
+        range_note = ""
     status = await send_status(
-        f"🔴 **Recording {'video' if is_video else 'audio'}** `{name[:50]}`…\n"
+        f"🔴 **Recording {kind}** `{name[:50]}`…{range_note}\n"
         f"Tap **⏹ Stop & send** when done (auto-stops at {_dur(secs)}).",
         _rec_kb,
     )
@@ -348,17 +393,32 @@ async def _begin_record(c: Client, chat_id, secs, send_status):
 @Client.on_message(command(["record", f"record@{BOT_USERNAME}", "rec"]) & other_filters)
 @authorized_users_only
 async def record_cmd(c: Client, m: Message):
+    start_secs = None
     secs = RECORD_MAX
-    if len(m.command) > 1:
-        try:
-            secs = max(1, min(RECORD_MAX, int(m.command[1])))
-        except ValueError:
-            pass
+    args = m.command[1:]
+
+    if len(args) >= 2:
+        t0 = _parse_time(args[0])
+        t1 = _parse_time(args[1])
+        if t0 is None or t1 is None or t1 <= t0:
+            return await m.reply(
+                "❌ Invalid times. Examples:\n"
+                "• `/record` — record now\n"
+                "• `/record 30m` — record for 30 minutes\n"
+                "• `/record 01:30:00 02:00:00` — clip from 1 h 30 m to 2 h",
+                quote=True,
+            )
+        start_secs = t0
+        secs = t1 - t0
+    elif len(args) == 1:
+        t = _parse_time(args[0])
+        if t is not None:
+            secs = max(1, min(RECORD_MAX, t))
 
     async def send(text, markup=None):
         return await m.reply(text, reply_markup=markup)
 
-    await _begin_record(c, m.chat.id, secs, send)
+    await _begin_record(c, m.chat.id, secs, send, start_secs=start_secs)
 
 
 @Client.on_callback_query(filters.regex(r"^rectoggle$"))
