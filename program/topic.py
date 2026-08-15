@@ -21,7 +21,7 @@ async def cmd_topic(c: Client, m: Message):
     regardless of the current lock (see driver/filters.py), so a chat can't
     get stuck."""
     chat = m.chat
-    if chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
+    if chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP, ChatType.FORUM):
         return await m.reply("topic locking only applies to group chats with forum topics enabled.")
 
     args = m.command[1:]

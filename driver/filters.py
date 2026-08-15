@@ -14,7 +14,7 @@ _topic_cmd = filters.command(["topic", f"topic@{BOT_USERNAME}"], COMMAND_PREFIXE
 
 
 async def _topic_ok(_, client, m):
-    if not TOPIC_LOCK or m.chat is None or m.chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
+    if not TOPIC_LOCK or m.chat is None or m.chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP, ChatType.FORUM):
         return True
     locked = TOPIC_LOCK.get(m.chat.id)
     if locked is None:
