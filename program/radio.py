@@ -573,6 +573,20 @@ async def radio_page(_, query: CallbackQuery):
     await query.edit_message_text("📻 **Radio** — pick a station:", reply_markup=_kb(page))
 
 
+async def _play_retry(chat_id, stream, tries=2, delay=2.5):
+    """call_py.play() with one retry. Both DNS hiccups on the stream host and
+    Telegram's transient INTERDC_X_CALL_ERROR on JoinGroupCall tend to clear
+    on a second attempt a couple seconds later."""
+    for attempt in range(tries):
+        try:
+            return await call_py.play(chat_id, stream)
+        except Exception:
+            if attempt == tries - 1:
+                raise
+            log.warning("radio play() failed for %s, retrying in %ss", chat_id, delay, exc_info=True)
+            await asyncio.sleep(delay)
+
+
 @Client.on_callback_query(filters.regex(r"^rd:"))
 async def radio_tune(c: Client, query: CallbackQuery):
     try:
@@ -594,12 +608,12 @@ async def radio_tune(c: Client, query: CallbackQuery):
         await drop_stale_queue(chat_id)
         if card_img:
             # stream the still placeholder as the VC video + radio as audio
-            await call_py.play(chat_id, MediaStream(
+            await _play_retry(chat_id, MediaStream(
                 card_img, audio_path=stream,
                 video_parameters=VideoQuality.SD_480p, audio_parameters=AudioQuality.HIGH,
             ))
         else:
-            await call_py.play(chat_id, MediaStream(stream, video_flags=MediaStream.Flags.IGNORE))
+            await _play_retry(chat_id, MediaStream(stream, video_flags=MediaStream.Flags.IGNORE))
         clear_queue(chat_id)  # radio takes over — it's a single live stream
         add_to_queue(chat_id, name[:70], stream, url, "Audio", 0)
     except Exception as e:
