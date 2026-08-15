@@ -3,7 +3,7 @@ import hashlib
 
 from config import BOT_USERNAME, LIBRARY_ROOT, LIBRARY_CATEGORIES, MAX_QUEUE_SIZE
 from driver.filters import command, other_filters
-from driver.queues import QUEUE, add_to_queue
+from driver.queues import QUEUE, add_to_queue, drop_if_live
 from driver.clients import call_py
 from driver.transcode import prepare_for_stream, probe_tracks, transcode_selection
 from driver.utils import (
@@ -178,6 +178,7 @@ async def lib_play_cb(c: Client, query: CallbackQuery):
     if not ok:
         return await query.answer(f"❌ {reason}"[:190], show_alert=True)
     await drop_stale_queue(chat_id)
+    drop_if_live(chat_id)  # radio/IPTV never hold a real queue slot
     name = os.path.basename(path)
     # if the file has multiple audio tracks or any subtitles, offer a pick-at-play
     # selector; otherwise just play it
@@ -249,6 +250,7 @@ async def lib_go_cb(c: Client, query: CallbackQuery):
     await query.answer("preparing…")
     await ensure_assistant_in_chat(c, chat_id)
     await drop_stale_queue(chat_id)
+    drop_if_live(chat_id)  # radio/IPTV never hold a real queue slot
     name = sel["name"]
     if chat_id in QUEUE:
         # busy: queue the original (default tracks) — selection applies to immediate plays

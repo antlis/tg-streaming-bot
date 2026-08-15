@@ -4,9 +4,9 @@ import time
 import urllib.request
 import logging
 
-from config import BOT_USERNAME, MAX_QUEUE_SIZE
+from config import BOT_USERNAME
 from driver.filters import command, other_filters
-from driver.queues import QUEUE, add_to_queue, clear_queue
+from driver.queues import add_to_queue, clear_queue, set_live
 from driver.utils import (
     can_manage_vc, control_panel, media_video,
     drop_stale_queue, ensure_assistant_in_chat,
@@ -309,33 +309,29 @@ async def iptv_pick(c: Client, query: CallbackQuery):
 
     try:
         await drop_stale_queue(chat_id)
-        if chat_id in QUEUE:
-            pos = add_to_queue(chat_id, label, url, url, "Video", 0)
-            if pos == -1:
-                return await _err(f"queue is full (max {MAX_QUEUE_SIZE})")
-            log.info("IPTV: queued %s at pos %s", label, pos)
-            await _finish(f"💡 **Added to queue »** `{pos}`\n📺 **Channel:** {label}")
-        else:
-            log.info("IPTV: calling play() for %s", label)
-            # Resolve HLS master playlists to a single variant — ffmpeg 5.1
-            # chokes on multi-variant manifests from certain CDNs (Rutube etc.)
-            resolved = _resolve_hls_variant(url)
-            if resolved != url:
-                log.info("IPTV: resolved HLS variant for %s", label)
-            stream = MediaStream(
-                resolved,
-                audio_parameters=AudioQuality.HIGH,
-                video_parameters=VideoQuality.HD_720p,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Referer": "https://rutube.ru/",
-                },
-            )
-            await call_py.play(chat_id, stream)
-            clear_queue(chat_id)
-            add_to_queue(chat_id, label, url, url, "Video", 0)
-            log.info("IPTV: play() succeeded for %s", label)
-            await _finish(f"📺 **Now streaming:** {label}\n🔴 _Live IPTV_")
+        log.info("IPTV: calling play() for %s", label)
+        # Resolve HLS master playlists to a single variant — ffmpeg 5.1
+        # chokes on multi-variant manifests from certain CDNs (Rutube etc.)
+        resolved = _resolve_hls_variant(url)
+        if resolved != url:
+            log.info("IPTV: resolved HLS variant for %s", label)
+        stream = MediaStream(
+            resolved,
+            audio_parameters=AudioQuality.HIGH,
+            video_parameters=VideoQuality.HD_720p,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": "https://rutube.ru/",
+            },
+        )
+        await call_py.play(chat_id, stream)
+        # IPTV takes over immediately, like /radio — it's a single live
+        # broadcast, never a real queue slot.
+        clear_queue(chat_id)
+        add_to_queue(chat_id, label, url, url, "Video", 0)
+        set_live(chat_id, True)
+        log.info("IPTV: play() succeeded for %s", label)
+        await _finish(f"📺 **Now streaming:** {label}\n🔴 _Live IPTV_")
     except Exception as e:
         import traceback
         log.error("IPTV: pytgcalls play() failed for %s\n%s", label, traceback.format_exc())

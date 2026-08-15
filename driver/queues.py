@@ -7,6 +7,30 @@ QUEUE = {}
 RESUME = {}    # last track + playback position per chat (for /continue)
 LOOP = {}      # chat_id -> True when the current track should repeat on end
 AUTOPLAY = {}  # chat_id -> True when auto-DJ should queue a related track at the end
+LIVE = {}      # chat_id -> True when the now-playing item is a live broadcast
+               # (radio/IPTV) — it never holds a real queue slot, so a new
+               # /play-type command should replace it immediately.
+
+
+def set_live(chat_id, on):
+    if on:
+        LIVE[chat_id] = True
+    else:
+        LIVE.pop(chat_id, None)
+
+
+def is_live(chat_id):
+    return LIVE.get(chat_id, False)
+
+
+def drop_if_live(chat_id):
+    """If the chat is currently on a live broadcast, clear it so the caller's
+    upcoming `if chat_id in QUEUE` check sees an empty queue and plays the new
+    request immediately instead of queuing behind radio/IPTV."""
+    if is_live(chat_id):
+        clear_queue(chat_id)
+        return True
+    return False
 
 
 def set_loop(chat_id, on):
@@ -122,6 +146,7 @@ def pop_an_item(chat_id):
       
 def clear_queue(chat_id):
    LOOP.pop(chat_id, None)
+   LIVE.pop(chat_id, None)
    if chat_id in QUEUE:
       QUEUE.pop(chat_id)
       return 1

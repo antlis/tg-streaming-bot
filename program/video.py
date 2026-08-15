@@ -10,7 +10,7 @@ from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2, MAX_QUEUE_SIZE, S
 from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
-from driver.queues import QUEUE, add_to_queue
+from driver.queues import QUEUE, add_to_queue, drop_if_live
 from driver.clients import call_py, user
 from driver.transcode import prepare_for_stream
 from driver.utils import make_progress, control_panel, media_video, drop_stale_queue
@@ -218,6 +218,8 @@ async def vplay(c: Client, m: Message):
 
     # if a previous stream died silently, clear the stale queue so we rejoin
     await drop_stale_queue(chat_id)
+    # radio/IPTV never hold a real queue slot — a new /vplay takes over now
+    drop_if_live(chat_id)
     if replied:
         if replied.video or replied.document:
             media = replied.video or replied.document
@@ -476,6 +478,8 @@ async def vstream(c: Client, m: Message):
 
     # if a previous stream died silently, clear the stale queue so we rejoin
     await drop_stale_queue(chat_id)
+    # radio/IPTV never hold a real queue slot — a new /vstream takes over now
+    drop_if_live(chat_id)
     if len(m.command) < 2:
         await m.reply("» give me a live-link/m3u8 url/youtube link to stream.")
     else:

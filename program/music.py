@@ -12,7 +12,7 @@ from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2, MAX_QUEUE_SIZE, S
 from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
 from driver.filters import command, other_filters
-from driver.queues import QUEUE, add_to_queue
+from driver.queues import QUEUE, add_to_queue, drop_if_live
 from driver.clients import call_py, user
 from driver.utils import bash, make_progress, control_panel, media_audio, drop_stale_queue
 from pyrogram import Client
@@ -212,6 +212,8 @@ async def play(c: Client, m: Message):
                 )
     # if a previous stream died silently, clear the stale queue so we rejoin
     await drop_stale_queue(chat_id)
+    # radio/IPTV never hold a real queue slot — a new /play takes over now
+    drop_if_live(chat_id)
     if replied:
         # audio sent as a generic file/document (e.g. a bare .mp3) counts too
         audio_doc = (
