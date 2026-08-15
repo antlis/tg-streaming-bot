@@ -14,7 +14,7 @@ from pytgcalls import idle
 from pyrogram.types import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats
 from pyrogram.errors import FloodWait
 from driver.clients import call_py, bot
-from driver.queues import load_resume
+from driver.queues import load_resume, load_topic_lock
 from program.resume import track_position
 from program.radio import radio_updater
 import program.iptv  # registers /iptv handlers
@@ -28,6 +28,7 @@ BOT_COMMANDS = [
     BotCommand("lplay", "play a local library file by name"),
     BotCommand("radio", "tune in to an internet radio station"),
     BotCommand("iptv", "search and stream live TV channels (iptv-org catalogue)"),
+    BotCommand("topic", "restrict the bot to one forum topic: lock|unlock|status"),
     BotCommand("record", "record audio/video; /record 01:30 02:00 to clip a range"),
     BotCommand("stoprec", "stop the current recording and send it"),
     BotCommand("pause", "pause playback (admin)"),
@@ -90,6 +91,7 @@ async def start_bot():
     except Exception as e:
         log.warning("could not register bot commands: %s", e)
     load_resume()  # restore resume state so /continue survives restarts
+    load_topic_lock()
     asyncio.ensure_future(heartbeat())
     asyncio.ensure_future(track_position())
     asyncio.ensure_future(radio_updater())

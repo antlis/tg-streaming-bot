@@ -2,11 +2,32 @@ from time import monotonic
 from typing import List, Union
 
 from pyrogram import filters
+from pyrogram.enums import ChatType
 
-from config import COMMAND_PREFIXES, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW, SUDO_USERS
+from config import BOT_USERNAME, COMMAND_PREFIXES, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW, SUDO_USERS
+from driver.queues import TOPIC_LOCK
 
 
-other_filters = filters.group & ~filters.via_bot & ~filters.forwarded
+# /topic itself must always get through, locked or not — otherwise a chat that
+# locks the "wrong" topic (or the one someone later deletes) can't undo it.
+_topic_cmd = filters.command(["topic", f"topic@{BOT_USERNAME}"], COMMAND_PREFIXES)
+
+
+async def _topic_ok(_, client, m):
+    if not TOPIC_LOCK or m.chat is None or m.chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
+        return True
+    locked = TOPIC_LOCK.get(m.chat.id)
+    if locked is None:
+        return True
+    if await _topic_cmd(client, m):
+        return True
+    thread_id = m.message_thread_id if getattr(m, "is_topic_message", False) else None
+    return thread_id == locked
+
+
+topic_ok = filters.create(_topic_ok)
+
+other_filters = filters.group & ~filters.via_bot & ~filters.forwarded & topic_ok
 other_filters2 = (
     filters.private & ~filters.via_bot & ~filters.forwarded
 )

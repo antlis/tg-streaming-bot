@@ -56,6 +56,43 @@ def load_resume():
     except Exception:
         pass
 
+# TOPIC_LOCK restricts a group to a single forum topic (see /topic in
+# program/topic.py) — every other topic there, including "General", is then
+# ignored. Persisted the same way as RESUME so it survives restarts.
+TOPIC_LOCK = {}  # chat_id -> locked message_thread_id
+_TOPIC_LOCK_FILE = os.path.join("downloads", "topic_locks.json")
+
+
+def save_topic_lock():
+    try:
+        os.makedirs("downloads", exist_ok=True)
+        tmp = _TOPIC_LOCK_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(TOPIC_LOCK, f)
+        os.replace(tmp, _TOPIC_LOCK_FILE)
+    except Exception:
+        pass
+
+
+def load_topic_lock():
+    try:
+        with open(_TOPIC_LOCK_FILE) as f:
+            data = json.load(f)
+        TOPIC_LOCK.clear()
+        TOPIC_LOCK.update({int(k): int(v) for k, v in data.items()})
+    except Exception:
+        pass
+
+
+def set_topic_lock(chat_id, topic_id):
+    TOPIC_LOCK[chat_id] = topic_id
+    save_topic_lock()
+
+
+def clear_topic_lock(chat_id):
+    if TOPIC_LOCK.pop(chat_id, None) is not None:
+        save_topic_lock()
+
 def add_to_queue(chat_id, songname, link, ref, type, quality):
    if chat_id in QUEUE:
       chat_queue = QUEUE[chat_id]
