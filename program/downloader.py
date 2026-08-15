@@ -8,6 +8,7 @@ helpers as the streaming commands so they survive YouTube's SABR changes.
 import os
 
 from config import BOT_USERNAME
+from driver.decorators import errors
 from driver.filters import command, other_filters
 from program.music import ytsearch as audio_search, ytdl as audio_dl
 from program.video import ytsearch as video_search, ytdl as video_dl
@@ -16,6 +17,7 @@ from pyrogram.types import Message
 
 
 @Client.on_message(command(["song", f"song@{BOT_USERNAME}"]) & other_filters)
+@errors
 async def song(c: Client, m: Message):
     if len(m.command) < 2:
         return await m.reply("» usage: `/song <name or YouTube URL>`")
@@ -46,6 +48,7 @@ async def song(c: Client, m: Message):
 
 
 @Client.on_message(command(["video", f"video@{BOT_USERNAME}", "vsong", f"vsong@{BOT_USERNAME}"]) & other_filters)
+@errors
 async def video(c: Client, m: Message):
     if len(m.command) < 2:
         return await m.reply("» usage: `/video <name or YouTube URL>`")

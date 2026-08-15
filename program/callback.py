@@ -1,5 +1,6 @@
 
 
+from driver.decorators import errors_cb
 from driver.queues import QUEUE, RESUME
 from driver.utils import can_manage_vc
 from pyrogram import Client, filters
@@ -16,6 +17,7 @@ from config import (
 
 
 @Client.on_callback_query(filters.regex("cbstart"))
+@errors_cb
 async def cbstart(_, query: CallbackQuery):
     rows = [
         [
@@ -58,6 +60,7 @@ async def cbstart(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("cbhowtouse"))
+@errors_cb
 async def cbguides(_, query: CallbackQuery):
     await query.edit_message_text(
         f"""❓ **Basic Guide for using this bot:**
@@ -81,6 +84,7 @@ async def cbguides(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("cbcmds"))
+@errors_cb
 async def cbcmds(_, query: CallbackQuery):
     await query.edit_message_text(
         f"""✨ **Hello [{query.message.chat.first_name}](tg://user?id={query.message.chat.id}) !**
@@ -104,6 +108,7 @@ async def cbcmds(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("cbbasic"))
+@errors_cb
 async def cbbasic(_, query: CallbackQuery):
     await query.edit_message_text(
         f"""🏮 here is the basic commands:
@@ -129,6 +134,7 @@ async def cbbasic(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("cbadmin"))
+@errors_cb
 async def cbadmin(_, query: CallbackQuery):
     await query.edit_message_text(
         f"""🏮 here is the admin commands:
@@ -151,6 +157,7 @@ async def cbadmin(_, query: CallbackQuery):
     )
 
 @Client.on_callback_query(filters.regex("cbsudo"))
+@errors_cb
 async def cbsudo(_, query: CallbackQuery):
     await query.edit_message_text(
         f"""🏮 here is the sudo commands:
@@ -168,6 +175,7 @@ async def cbsudo(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("cbmenu"))
+@errors_cb
 async def cbmenu(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
@@ -201,6 +209,7 @@ async def cbmenu(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("cls"))
+@errors_cb
 async def close(_, query: CallbackQuery):
     a = await _.get_chat_member(query.message.chat.id, query.from_user.id)
     if not can_manage_vc(a):

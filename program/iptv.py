@@ -5,6 +5,7 @@ import urllib.request
 import logging
 
 from config import BOT_USERNAME
+from driver.decorators import errors, errors_cb
 from driver.filters import command, other_filters
 from driver.queues import add_to_queue, clear_queue, set_live
 from driver.utils import (
@@ -183,6 +184,7 @@ def _help_kb() -> InlineKeyboardMarkup:
 # ── /iptv command ─────────────────────────────────────────────────────────────
 
 @Client.on_message(command(["iptv", f"iptv@{BOT_USERNAME}"]) & other_filters)
+@errors
 async def iptv_cmd(c: Client, m: Message):
     await m.delete()
     chat_id = m.chat.id
@@ -237,6 +239,7 @@ async def iptv_cmd(c: Client, m: Message):
 # ── callbacks ─────────────────────────────────────────────────────────────────
 
 @Client.on_callback_query(filters.regex(r"^iptv:(\d+)$"))
+@errors_cb
 async def iptv_pick(c: Client, query: CallbackQuery):
     chat_id = query.message.chat.id
     log.info("IPTV: pick callback chat=%s user=%s data=%s",
@@ -339,6 +342,7 @@ async def iptv_pick(c: Client, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex(r"^iptv_help$"))
+@errors_cb
 async def iptv_help_cb(_, query: CallbackQuery):
     await query.answer()
     await query.message.edit(

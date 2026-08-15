@@ -4,6 +4,10 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] — 2026-08-16
+### Added
+- **Global error wrapper on every command and button.** Previously an unhandled exception in a handler produced total silence — nothing sent to the chat, only a line in `docker logs` (that's exactly how the `/topic lock` crash went unnoticed last release). Every `@Client.on_message` and `@Client.on_callback_query` handler is now wrapped: message commands reply with the error, button callbacks show it as a toast alert, and both log it server-side first.
+
 ## [1.7.1] — 2026-08-15
 ### Fixed
 - **`/topic lock` did nothing** — threw an unhandled error on every attempt in a real forum group (`chat.type` is `ChatType.FORUM` there, not `GROUP`/`SUPERGROUP`, and the message attribute this kurigram version exposes is `topic_message`, not `is_topic_message`). Both are now recognized correctly.

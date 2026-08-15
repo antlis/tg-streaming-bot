@@ -1,6 +1,7 @@
 import asyncio
 
 from config import BOT_USERNAME
+from driver.decorators import errors, errors_cb
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue, drop_if_live
 from driver.clients import call_py
@@ -26,6 +27,7 @@ def _results(query, n=6):
 
 
 @Client.on_message(command(["search", f"search@{BOT_USERNAME}", "ytsearch", "yts"]) & other_filters)
+@errors
 async def search_cmd(c: Client, m: Message):
     if len(m.command) < 2:
         return await m.reply("» usage: `/search <song or video name>`")
@@ -92,10 +94,12 @@ async def _play_choice(c, query, video):
 
 
 @Client.on_callback_query(filters.regex(r"^sa:"))
+@errors_cb
 async def search_audio_cb(c: Client, query: CallbackQuery):
     await _play_choice(c, query, video=False)
 
 
 @Client.on_callback_query(filters.regex(r"^sv:"))
+@errors_cb
 async def search_video_cb(c: Client, query: CallbackQuery):
     await _play_choice(c, query, video=True)

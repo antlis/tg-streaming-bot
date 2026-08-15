@@ -10,6 +10,7 @@ from pyrogram.types import (
     Message,
 )
 from pyrogram import Client, filters
+from driver.decorators import errors
 from driver.queues import QUEUE, get_queue
 from driver.filters import command, other_filters
 
@@ -20,6 +21,7 @@ keyboard = InlineKeyboardMarkup(
 
 
 @Client.on_message(command(["playlist", f"playlist@{BOT_USERNAME}", "queue", f"queue@{BOT_USERNAME}"]) & other_filters)
+@errors
 async def playlist(client, m: Message):
    chat_id = m.chat.id
    if chat_id in QUEUE:

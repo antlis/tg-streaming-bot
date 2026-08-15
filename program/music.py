@@ -11,6 +11,7 @@ import logging
 from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2, MAX_QUEUE_SIZE, SPONSORBLOCK_REMOVE
 from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
+from driver.decorators import errors
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue, drop_if_live
 from driver.clients import call_py, user
@@ -145,6 +146,7 @@ async def ytdl(format: str, link: str, status_msg=None):
 
 
 @Client.on_message(command(["play", f"play@{BOT_USERNAME}"]) & other_filters)
+@errors
 async def play(c: Client, m: Message):
     await m.delete()
     replied = m.reply_to_message

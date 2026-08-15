@@ -9,12 +9,13 @@ import platform
 from config import BOT_USERNAME
 from driver.filters import command
 from pyrogram import Client, filters
-from driver.decorators import sudo_users_only, humanbytes
+from driver.decorators import sudo_users_only, humanbytes, errors
 
 
 # FETCH SYSINFO
 
 @Client.on_message(command(["sysinfo", f"sysinfo@{BOT_USERNAME}"]))
+@errors
 @sudo_users_only
 async def give_sysinfo(client, message):
     splatform = platform.system()

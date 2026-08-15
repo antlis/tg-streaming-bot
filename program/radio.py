@@ -12,7 +12,7 @@ from config import BOT_USERNAME, RADIO_IMG, TRANSCODE_HWACCEL
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue, clear_queue, get_queue, set_live
 from driver.clients import call_py
-from driver.decorators import authorized_users_only
+from driver.decorators import authorized_users_only, errors, errors_cb
 from driver.utils import (
     control_panel,
     ensure_assistant_in_chat,
@@ -236,6 +236,7 @@ def _kb(page):
 
 
 @Client.on_message(command(["radio", f"radio@{BOT_USERNAME}"]) & other_filters)
+@errors
 async def radio(c: Client, m: Message):
     await m.reply("📻 **Radio** — pick a station:", reply_markup=_kb(0))
 
@@ -391,6 +392,7 @@ async def _begin_record(c: Client, chat_id, secs, send_status, start_secs=None, 
 
 
 @Client.on_message(command(["record", f"record@{BOT_USERNAME}", "rec"]) & other_filters)
+@errors
 @authorized_users_only
 async def record_cmd(c: Client, m: Message):
     start_secs = None
@@ -423,6 +425,7 @@ async def record_cmd(c: Client, m: Message):
 
 
 @Client.on_callback_query(filters.regex(r"^rectoggle$"))
+@errors_cb
 async def rectoggle_cb(c: Client, query: CallbackQuery):
     chat_id = query.message.chat.id
     thread_id = getattr(query.message, "message_thread_id", None)
@@ -544,6 +547,7 @@ async def _record_watch(c: Client, chat_id):
 
 
 @Client.on_callback_query(filters.regex(r"^recstop$"))
+@errors_cb
 async def recstop_cb(c: Client, query: CallbackQuery):
     chat_id = query.message.chat.id
     rec = RECORDING.get(chat_id)
@@ -557,6 +561,7 @@ async def recstop_cb(c: Client, query: CallbackQuery):
 
 
 @Client.on_message(command(["stoprec", f"stoprec@{BOT_USERNAME}"]) & other_filters)
+@errors
 @authorized_users_only
 async def stoprec_cmd(c: Client, m: Message):
     rec = RECORDING.get(m.chat.id)
@@ -567,11 +572,13 @@ async def stoprec_cmd(c: Client, m: Message):
 
 
 @Client.on_callback_query(filters.regex(r"^rdnoop$"))
+@errors_cb
 async def radio_noop(_, query: CallbackQuery):
     await query.answer()
 
 
 @Client.on_callback_query(filters.regex(r"^rdp:"))
+@errors_cb
 async def radio_page(_, query: CallbackQuery):
     page = int(query.data.split(":")[1])
     await query.edit_message_text("📻 **Radio** — pick a station:", reply_markup=_kb(page))
@@ -592,6 +599,7 @@ async def _play_retry(chat_id, stream, tries=2, delay=2.5):
 
 
 @Client.on_callback_query(filters.regex(r"^rd:"))
+@errors_cb
 async def radio_tune(c: Client, query: CallbackQuery):
     try:
         name, url = STATIONS[int(query.data.split(":")[1])]

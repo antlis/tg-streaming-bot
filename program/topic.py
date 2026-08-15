@@ -5,6 +5,7 @@ from pyrogram.enums import ChatType
 from pyrogram.types import Message
 
 from config import BOT_USERNAME
+from driver.decorators import errors
 from driver.filters import command, other_filters
 from driver.queues import clear_topic_lock, set_topic_lock, TOPIC_LOCK
 from driver.utils import can_manage_vc
@@ -13,6 +14,7 @@ log = logging.getLogger(__name__)
 
 
 @Client.on_message(command(["topic", f"topic@{BOT_USERNAME}"]) & other_filters)
+@errors
 async def cmd_topic(c: Client, m: Message):
     """/topic lock|unlock|status — restrict the bot to one forum topic in this
     group. /topic lock, sent from inside the desired topic, confines the bot

@@ -12,7 +12,7 @@ from config import BOT_USERNAME, IDLE_LEAVE_MINUTES
 from driver.clients import call_py, bot
 from driver.queues import QUEUE, RESUME, get_queue, save_resume, clear_queue, is_loop
 from driver.filters import command, other_filters
-from driver.decorators import authorized_users_only
+from driver.decorators import authorized_users_only, errors, errors_cb
 from driver.utils import can_manage_vc, control_panel, maybe_prefetch_autoplay
 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, Call
 from pyrogram import Client, filters
@@ -181,6 +181,7 @@ async def resume_last(chat_id):
 
 
 @Client.on_message(command(["info", f"info@{BOT_USERNAME}", "np", "nowplaying"]) & other_filters)
+@errors
 async def info_cmd(c: Client, m):
     """Now-playing + the control panel, callable any time."""
     chat_id = m.chat.id
@@ -217,6 +218,7 @@ async def info_cmd(c: Client, m):
 
 
 @Client.on_message(command(["seek", f"seek@{BOT_USERNAME}"]) & other_filters)
+@errors
 @authorized_users_only
 async def seek_cmd(c: Client, m):
     chat_id = m.chat.id
@@ -243,6 +245,7 @@ async def seek_cmd(c: Client, m):
 
 
 @Client.on_message(command(["continue", "resumelast", f"continue@{BOT_USERNAME}"]) & other_filters)
+@errors
 async def continue_cmd(c: Client, m):
     chat_id = m.chat.id
     info = RESUME.get(chat_id)
@@ -259,6 +262,7 @@ async def continue_cmd(c: Client, m):
 
 
 @Client.on_callback_query(filters.regex("cbrestore"))
+@errors_cb
 async def cbrestore(c: Client, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !")

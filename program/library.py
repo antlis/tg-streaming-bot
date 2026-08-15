@@ -2,6 +2,7 @@ import os
 import hashlib
 
 from config import BOT_USERNAME, LIBRARY_ROOT, LIBRARY_CATEGORIES, MAX_QUEUE_SIZE
+from driver.decorators import errors, errors_cb
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue, drop_if_live
 from driver.clients import call_py
@@ -136,6 +137,7 @@ def _listing_kb(dirpath, page):
 
 
 @Client.on_message(command(["library", f"library@{BOT_USERNAME}", "lib"]) & other_filters)
+@errors
 async def library(c: Client, m: Message):
     if _disabled():
         return await m.reply("📚 the local library isn't configured (set `LIBRARY_ROOT`).")
@@ -145,16 +147,19 @@ async def library(c: Client, m: Message):
 
 
 @Client.on_callback_query(filters.regex(r"^libcats$"))
+@errors_cb
 async def lib_cats_cb(_, query: CallbackQuery):
     await query.edit_message_text("📚 **Local library** — pick a category:", reply_markup=_categories_kb())
 
 
 @Client.on_callback_query(filters.regex(r"^libnoop$"))
+@errors_cb
 async def lib_noop_cb(_, query: CallbackQuery):
     await query.answer()
 
 
 @Client.on_callback_query(filters.regex(r"^lx:"))
+@errors_cb
 async def lib_browse_cb(_, query: CallbackQuery):
     parts = query.data.split(":")
     path = _TOKENS.get(parts[1])
@@ -166,6 +171,7 @@ async def lib_browse_cb(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex(r"^lp:"))
+@errors_cb
 async def lib_play_cb(c: Client, query: CallbackQuery):
     path = _TOKENS.get(query.data.split(":")[1])
     if not path or not os.path.isfile(path):
@@ -212,6 +218,7 @@ async def _start_library_video(c, msg, chat_id, name, streamable_src, status=Non
 
 
 @Client.on_callback_query(filters.regex(r"^la:"))
+@errors_cb
 async def lib_audio_cb(c: Client, query: CallbackQuery):
     sel = SELECT.get(query.message.chat.id)
     if not sel:
@@ -222,6 +229,7 @@ async def lib_audio_cb(c: Client, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex(r"^ls:"))
+@errors_cb
 async def lib_sub_cb(c: Client, query: CallbackQuery):
     sel = SELECT.get(query.message.chat.id)
     if not sel:
@@ -239,6 +247,7 @@ async def lib_sub_cb(c: Client, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex(r"^lpgo$"))
+@errors_cb
 async def lib_go_cb(c: Client, query: CallbackQuery):
     chat_id = query.message.chat.id
     sel = SELECT.pop(chat_id, None)
@@ -272,6 +281,7 @@ async def lib_go_cb(c: Client, query: CallbackQuery):
 
 
 @Client.on_message(command(["lplay", f"lplay@{BOT_USERNAME}"]) & other_filters)
+@errors
 async def lplay(c: Client, m: Message):
     if _disabled():
         return await m.reply("📚 the local library isn't configured.")

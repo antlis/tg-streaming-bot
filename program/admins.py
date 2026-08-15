@@ -2,7 +2,7 @@ from cache.admins import admins
 from cache.admins import delete as invalidate_admin_cache
 from driver.clients import call_py
 from pyrogram import Client, filters
-from driver.decorators import authorized_users_only
+from driver.decorators import authorized_users_only, errors, errors_cb
 from driver.filters import command, other_filters
 import random
 from driver.queues import QUEUE, clear_queue, get_queue, is_loop, set_loop, is_autoplay, set_autoplay
@@ -37,6 +37,7 @@ VOLUME_STEP = 20
 
 
 @Client.on_message(command(["reload", f"reload@{BOT_USERNAME}"]) & other_filters)
+@errors
 @authorized_users_only
 async def update_admin(client, message):
 
@@ -59,6 +60,7 @@ async def _admin_change_watcher(client, event):
 
 
 @Client.on_message(command(["loop", f"loop@{BOT_USERNAME}", "repeat"]) & other_filters)
+@errors
 @authorized_users_only
 async def loop_cmd(client, m: Message):
     chat_id = m.chat.id
@@ -71,6 +73,7 @@ async def loop_cmd(client, m: Message):
 
 
 @Client.on_message(command(["autoplay", f"autoplay@{BOT_USERNAME}", "autodj"]) & other_filters)
+@errors
 @authorized_users_only
 async def autoplay_cmd(client, m: Message):
     chat_id = m.chat.id
@@ -84,6 +87,7 @@ async def autoplay_cmd(client, m: Message):
 
 
 @Client.on_message(command(["shuffle", f"shuffle@{BOT_USERNAME}"]) & other_filters)
+@errors
 @authorized_users_only
 async def shuffle_cmd(client, m: Message):
     chat_id = m.chat.id
@@ -97,6 +101,7 @@ async def shuffle_cmd(client, m: Message):
 
 
 @Client.on_message(command(["clear", f"clear@{BOT_USERNAME}", "clearqueue"]) & other_filters)
+@errors
 @authorized_users_only
 async def clear_cmd(client, m: Message):
     chat_id = m.chat.id
@@ -109,6 +114,7 @@ async def clear_cmd(client, m: Message):
 
 
 @Client.on_message(command(["skip", f"skip@{BOT_USERNAME}", "vskip"]) & other_filters)
+@errors
 @authorized_users_only
 async def skip(client, m: Message):
 
@@ -162,6 +168,7 @@ async def skip(client, m: Message):
     command(["stop", f"stop@{BOT_USERNAME}", "end", f"end@{BOT_USERNAME}", "vstop"])
     & other_filters
 )
+@errors
 @authorized_users_only
 async def stop(client, m: Message):
     chat_id = m.chat.id
@@ -179,6 +186,7 @@ async def stop(client, m: Message):
 @Client.on_message(
     command(["pause", f"pause@{BOT_USERNAME}", "vpause"]) & other_filters
 )
+@errors
 @authorized_users_only
 async def pause(client, m: Message):
     chat_id = m.chat.id
@@ -197,6 +205,7 @@ async def pause(client, m: Message):
 @Client.on_message(
     command(["resume", f"resume@{BOT_USERNAME}", "vresume"]) & other_filters
 )
+@errors
 @authorized_users_only
 async def resume(client, m: Message):
     chat_id = m.chat.id
@@ -215,6 +224,7 @@ async def resume(client, m: Message):
 @Client.on_message(
     command(["mute", f"mute@{BOT_USERNAME}", "vmute"]) & other_filters
 )
+@errors
 @authorized_users_only
 async def mute(client, m: Message):
     chat_id = m.chat.id
@@ -233,6 +243,7 @@ async def mute(client, m: Message):
 @Client.on_message(
     command(["unmute", f"unmute@{BOT_USERNAME}", "vunmute"]) & other_filters
 )
+@errors
 @authorized_users_only
 async def unmute(client, m: Message):
     chat_id = m.chat.id
@@ -248,6 +259,7 @@ async def unmute(client, m: Message):
 
 
 @Client.on_callback_query(filters.regex("cbpause"))
+@errors_cb
 async def cbpause(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
@@ -266,6 +278,7 @@ async def cbpause(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("cbresume"))
+@errors_cb
 async def cbresume(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
@@ -284,6 +297,7 @@ async def cbresume(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("cbstop"))
+@errors_cb
 async def cbstop(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
@@ -303,6 +317,7 @@ async def cbstop(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("cbskip"))
+@errors_cb
 async def cbskip(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
@@ -326,6 +341,7 @@ async def cbskip(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("cbmute"))
+@errors_cb
 async def cbmute(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
@@ -344,6 +360,7 @@ async def cbmute(_, query: CallbackQuery):
 
 
 @Client.on_callback_query(filters.regex("cbunmute"))
+@errors_cb
 async def cbunmute(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
@@ -365,6 +382,7 @@ async def cbunmute(_, query: CallbackQuery):
 @Client.on_message(
     command(["volume", f"volume@{BOT_USERNAME}", "vol"]) & other_filters
 )
+@errors
 @authorized_users_only
 async def change_volume(client, m: Message):
     chat_id = m.chat.id
@@ -406,16 +424,19 @@ async def _step_volume(_, query: CallbackQuery, delta: int):
 
 
 @Client.on_callback_query(filters.regex("cbvolup"))
+@errors_cb
 async def cbvolup(_, query: CallbackQuery):
     await _step_volume(_, query, VOLUME_STEP)
 
 
 @Client.on_callback_query(filters.regex("cbvoldown"))
+@errors_cb
 async def cbvoldown(_, query: CallbackQuery):
     await _step_volume(_, query, -VOLUME_STEP)
 
 
 @Client.on_callback_query(filters.regex(r"^seekp:"))
+@errors_cb
 async def cbseekpercent(_, query: CallbackQuery):
     if query.message.sender_chat:
         return await query.answer("you're an Anonymous Admin !\n\n» revert back to user account from admin rights.")
@@ -458,6 +479,7 @@ async def _send_screenshot(c, chat_id, fail, thread_id=None):
 
 
 @Client.on_callback_query(filters.regex(r"^snap$"))
+@errors_cb
 async def cbsnap(c: Client, query: CallbackQuery):
     await query.answer("📸 capturing…")
     await _send_screenshot(c, query.message.chat.id,
@@ -466,6 +488,7 @@ async def cbsnap(c: Client, query: CallbackQuery):
 
 
 @Client.on_message(command(["screenshot", f"screenshot@{BOT_USERNAME}", "snap"]) & other_filters)
+@errors
 async def screenshot_cmd(c: Client, m: Message):
     thread_id = m.message_thread_id if getattr(m, "topic_message", False) else None
     await _send_screenshot(c, m.chat.id, m.reply, thread_id=thread_id)

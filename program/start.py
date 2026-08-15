@@ -13,6 +13,7 @@ from config import (
 )
 from program import __version__
 from driver.clients import user
+from driver.decorators import errors
 from driver.filters import command, other_filters
 from pyrogram import Client, filters
 from pyrogram import __version__ as pyrover
@@ -51,6 +52,7 @@ async def _human_time_duration(seconds):
 @Client.on_message(
     command(["start", f"start@{BOT_USERNAME}"]) & filters.private
 )
+@errors
 async def start_(client: Client, message: Message):
     rows = [
         [
@@ -94,6 +96,7 @@ async def start_(client: Client, message: Message):
 @Client.on_message(
     command(["alive", f"alive@{BOT_USERNAME}"]) & filters.group
 )
+@errors
 async def alive(client: Client, message: Message):
     current_time = datetime.utcnow()
     uptime_sec = (current_time - START_TIME).total_seconds()
@@ -125,6 +128,7 @@ async def alive(client: Client, message: Message):
 
 
 @Client.on_message(command(["help", f"help@{BOT_USERNAME}", "commands", "cmds"]))
+@errors
 async def help_cmd(client: Client, message: Message):
     await message.reply_text(
         f"📖 **{BOT_NAME} — commands**\n\n"
@@ -154,6 +158,7 @@ async def help_cmd(client: Client, message: Message):
 
 
 @Client.on_message(command(["ping", f"ping@{BOT_USERNAME}"]))
+@errors
 async def ping_pong(client: Client, message: Message):
     start = time()
     m_reply = await message.reply_text("pinging...")
@@ -162,6 +167,7 @@ async def ping_pong(client: Client, message: Message):
 
 
 @Client.on_message(command(["uptime", f"uptime@{BOT_USERNAME}"]))
+@errors
 async def get_uptime(client: Client, message: Message):
     current_time = datetime.utcnow()
     uptime_sec = (current_time - START_TIME).total_seconds()
@@ -174,6 +180,7 @@ async def get_uptime(client: Client, message: Message):
 
 
 @Client.on_message(filters.new_chat_members)
+@errors
 async def new_chat(c: Client, m: Message):
     ass_uname = (await user.get_me()).username
     bot_id = (await c.get_me()).id

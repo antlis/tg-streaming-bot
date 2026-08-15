@@ -106,6 +106,7 @@ Two Telegram identities are required:
 - **Non-YouTube URLs** (Rutube, Vimeo, IPTV m3u8, etc.) are extracted and streamed live — no download wait, but HLS tokens expire after ~30 minutes so very long sessions may need a seek/restart.
 - Large Telegram files also download fully before streaming — a progress bar is shown; big files just take a while.
 - **`/radio` and `/iptv` never hold a queue slot** — they're live broadcasts, so starting anything else (`/play`, `/vplay`, `/vstream`, `/library`, `/lplay`, `/search`) while one is active interrupts it immediately instead of queuing behind it.
+- **A handler that errors always tells you** — every command and button reports the failure back to the chat (or as a toast, for buttons) instead of failing silently.
 
 ## Running where Telegram is filtered (Reality VPN sidecar)
 

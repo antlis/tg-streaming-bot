@@ -6,12 +6,13 @@ from config import BOT_USERNAME, SUDO_USERS
 from driver.filters import command, other_filters
 from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
 from pyrogram.types import ChatPrivileges
-from driver.decorators import authorized_users_only, sudo_users_only
+from driver.decorators import authorized_users_only, sudo_users_only, errors
 
 
 @Client.on_message(
     command(["userbotjoin", f"userbotjoin@{BOT_USERNAME}"]) & ~filters.private & ~filters.bot
 )
+@errors
 @authorized_users_only
 async def join_chat(c: Client, m: Message):
     chat_id = m.chat.id
@@ -42,6 +43,7 @@ async def join_chat(c: Client, m: Message):
 @Client.on_message(command(["userbotleave",
                             f"leave@{BOT_USERNAME}"]) & filters.group
 )
+@errors
 @authorized_users_only
 async def leave_chat(_, m: Message):
     chat_id = m.chat.id
@@ -59,6 +61,7 @@ async def leave_chat(_, m: Message):
 
 
 @Client.on_message(command(["leaveall", f"leaveall@{BOT_USERNAME}"]))
+@errors
 @sudo_users_only
 async def leave_all(client, message):
     if message.from_user.id not in SUDO_USERS:
@@ -86,6 +89,7 @@ async def leave_all(client, message):
 
 
 @Client.on_message(filters.left_chat_member)
+@errors
 async def ubot_leave(c: Client, m: Message):
     ass_id = (await user.get_me()).id
     bot_id = (await c.get_me()).id
