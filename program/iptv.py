@@ -23,6 +23,63 @@ _REPO_URL = "https://github.com/iptv-org/iptv"
 _COUNTRY_PLAYLISTS_URL = f"{_REPO_URL}#playlists-by-country"
 _CACHE_TTL = 12 * 3600  # refresh every 12 h
 
+# Some HLS master playlists (multi-variant) confuse ffmpeg 5.1.x.
+# Download the master, pick a single variant URL, and feed that instead.
+_HLS_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+)
+_HLS_VARIANT_PREFERENCE = ["1080", "720", "480", "360", "240"]
+
+
+def _resolve_hls_variant(url: str) -> str:
+    """If *url* is an HLS master playlist return the best single-variant URL,
+    otherwise return *url* unchanged."""
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": _HLS_UA, "Referer": "https://rutube.ru/"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            body = r.read().decode("utf-8", errors="ignore")
+
+        # Not a master playlist → use the URL as-is
+        if "#EXT-X-STREAM-INF" not in body:
+            return url
+
+        # Parse variant URLs and their resolutions
+        variants: list[tuple[int, str]] = []  # (height, url)
+        lines = body.splitlines()
+        stream_inf = None
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("#EXT-X-STREAM-INF:"):
+                stream_inf = stripped
+            elif stripped.startswith("http") and stream_inf is not None:
+                # Try to extract RESOLUTION from the EXT-X-STREAM-INF line
+                import re as _re
+                m = _re.search(r"RESOLUTION=(\d+)x(\d+)", stream_inf)
+                height = int(m.group(2)) if m else 0
+                variants.append((height, stripped))
+                stream_inf = None
+
+        if not variants:
+            return url
+
+        # Sort by height descending, pick the one closest to preferred
+        variants.sort(key=lambda x: -x[0])
+        for pref in _HLS_VARIANT_PREFERENCE:
+            for h, u in variants:
+                if str(h).startswith(pref):
+                    log.info("HLS variant: %s → %dp", u, h)
+                    return u
+        # Fallback: highest available
+        best = variants[0]
+        log.info("HLS variant (fallback): %s → %dp", best[1], best[0])
+        return best[1]
+    except Exception as e:
+        log.warning("HLS variant resolution failed (%s), using original URL", e)
+        return url
+
 _channels: list = []
 _cache_ts: float = 0.0
 _cache_lock = asyncio.Lock()
@@ -247,6 +304,9 @@ async def iptv_pick(c: Client, query: CallbackQuery):
                                  message_thread_id=thread_id)
 
     from driver.clients import call_py
+    from pytgcalls.types import MediaStream
+    from pytgcalls.types.stream import AudioQuality, VideoQuality
+
     try:
         await drop_stale_queue(chat_id)
         if chat_id in QUEUE:
@@ -257,12 +317,28 @@ async def iptv_pick(c: Client, query: CallbackQuery):
             await _finish(f"💡 **Added to queue »** `{pos}`\n📺 **Channel:** {label}")
         else:
             log.info("IPTV: calling play() for %s", label)
-            await call_py.play(chat_id, media_video(url))
+            # Resolve HLS master playlists to a single variant — ffmpeg 5.1
+            # chokes on multi-variant manifests from certain CDNs (Rutube etc.)
+            resolved = _resolve_hls_variant(url)
+            if resolved != url:
+                log.info("IPTV: resolved HLS variant for %s", label)
+            stream = MediaStream(
+                resolved,
+                audio_parameters=AudioQuality.HIGH,
+                video_parameters=VideoQuality.HD_720p,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Referer": "https://rutube.ru/",
+                },
+            )
+            await call_py.play(chat_id, stream)
             clear_queue(chat_id)
             add_to_queue(chat_id, label, url, url, "Video", 0)
             log.info("IPTV: play() succeeded for %s", label)
             await _finish(f"📺 **Now streaming:** {label}\n🔴 _Live IPTV_")
     except Exception as e:
+        import traceback
+        log.error("IPTV: pytgcalls play() failed for %s\n%s", label, traceback.format_exc())
         await _err(f"`{e}`")
 
 
