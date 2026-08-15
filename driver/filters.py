@@ -21,7 +21,7 @@ async def _topic_ok(_, client, m):
         return True
     if await _topic_cmd(client, m):
         return True
-    thread_id = m.message_thread_id if getattr(m, "is_topic_message", False) else None
+    thread_id = m.message_thread_id if getattr(m, "topic_message", False) else None
     return thread_id == locked
 
 

@@ -33,7 +33,7 @@ async def cmd_topic(c: Client, m: Message):
             return await m.reply("💡 admins (manage video chats) only.")
 
     if action == "lock":
-        if not m.is_topic_message:
+        if not m.topic_message:
             return await m.reply(
                 "send `/topic lock` from inside the topic you want the bot restricted to "
                 "(this was sent outside a topic, e.g. in \"General\")."

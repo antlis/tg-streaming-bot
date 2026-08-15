@@ -286,7 +286,7 @@ def _rec_caption(name, tracks, secs, icon="🎙"):
 _rec_kb = InlineKeyboardMarkup([[InlineKeyboardButton("⏹ Stop & send", callback_data="recstop")]])
 
 
-async def _begin_record(c: Client, chat_id, secs, send_status, start_secs=None):
+async def _begin_record(c: Client, chat_id, secs, send_status, start_secs=None, thread_id=None):
     """Start a recording of whatever is playing. send_status(text, markup) sends
     the status message and returns it — lets /record and the panel button share
     this, replying inline vs sending into the chat respectively.
@@ -385,7 +385,7 @@ async def _begin_record(c: Client, chat_id, secs, send_status, start_secs=None):
     RECORDING[chat_id] = {
         "proc": proc, "out": out, "name": name, "url": url, "video": is_video,
         "tracks": [track0] if track0 else [], "stop": asyncio.Event(),
-        "status": status, "start": time.time(), "errlog": errlog,
+        "status": status, "start": time.time(), "errlog": errlog, "thread_id": thread_id,
     }
     asyncio.ensure_future(_record_watch(c, chat_id))
 
@@ -418,12 +418,14 @@ async def record_cmd(c: Client, m: Message):
     async def send(text, markup=None):
         return await m.reply(text, reply_markup=markup)
 
-    await _begin_record(c, m.chat.id, secs, send, start_secs=start_secs)
+    thread_id = m.message_thread_id if getattr(m, "topic_message", False) else None
+    await _begin_record(c, m.chat.id, secs, send, start_secs=start_secs, thread_id=thread_id)
 
 
 @Client.on_callback_query(filters.regex(r"^rectoggle$"))
 async def rectoggle_cb(c: Client, query: CallbackQuery):
     chat_id = query.message.chat.id
+    thread_id = getattr(query.message, "message_thread_id", None)
     member = await c.get_chat_member(chat_id, query.from_user.id)
     if not can_manage_vc(member):
         return await query.answer("💡 admins (manage video chats) only", show_alert=True)
@@ -433,9 +435,9 @@ async def rectoggle_cb(c: Client, query: CallbackQuery):
     await query.answer("⏺ recording…")
 
     async def send(text, markup=None):
-        return await c.send_message(chat_id, text, reply_markup=markup)
+        return await c.send_message(chat_id, text, reply_markup=markup, message_thread_id=thread_id)
 
-    await _begin_record(c, chat_id, RECORD_MAX, send)
+    await _begin_record(c, chat_id, RECORD_MAX, send, thread_id=thread_id)
 
 
 async def _remux_faststart(src):
@@ -460,6 +462,7 @@ async def _record_watch(c: Client, chat_id):
     if not rec:
         return
     proc, url = rec["proc"], rec["url"]
+    thread_id = rec.get("thread_id")
     while True:
         if not rec["video"] and str(url).startswith("http"):
             t = (await asyncio.to_thread(_icy_metadata, url)).get("title")
@@ -507,7 +510,8 @@ async def _record_watch(c: Client, chat_id):
             os.remove(out)
         except OSError:
             pass
-        return await c.send_message(chat_id, "🚫 recording produced no content — check the bot logs.")
+        return await c.send_message(chat_id, "🚫 recording produced no content — check the bot logs.",
+                                    message_thread_id=thread_id)
     secs = time.time() - rec["start"]
     if rec["video"]:
         cap = _rec_caption(rec["name"], [], secs, icon="🎬")
@@ -516,9 +520,9 @@ async def _record_watch(c: Client, chat_id):
         # Remux to a normal faststart mp4 (copy, fast) so it plays as a video.
         send_path = await _remux_faststart(out) or out
         try:
-            await c.send_video(chat_id, send_path, caption=cap, supports_streaming=True)
+            await c.send_video(chat_id, send_path, caption=cap, supports_streaming=True, message_thread_id=thread_id)
         except Exception as e:
-            await c.send_message(chat_id, f"🚫 couldn't send the recording: `{e}`")
+            await c.send_message(chat_id, f"🚫 couldn't send the recording: `{e}`", message_thread_id=thread_id)
         if send_path != out:
             try:
                 os.remove(send_path)
@@ -527,12 +531,12 @@ async def _record_watch(c: Client, chat_id):
     else:
         cap = _rec_caption(rec["name"], rec["tracks"], secs)
         try:
-            await c.send_voice(chat_id, out, caption=cap)
+            await c.send_voice(chat_id, out, caption=cap, message_thread_id=thread_id)
         except Exception:
             try:
-                await c.send_audio(chat_id, out, caption=cap, title=rec["name"][:60])
+                await c.send_audio(chat_id, out, caption=cap, title=rec["name"][:60], message_thread_id=thread_id)
             except Exception as e:
-                await c.send_message(chat_id, f"🚫 couldn't send the recording: `{e}`")
+                await c.send_message(chat_id, f"🚫 couldn't send the recording: `{e}`", message_thread_id=thread_id)
     try:
         os.remove(out)
     except OSError:
@@ -594,6 +598,7 @@ async def radio_tune(c: Client, query: CallbackQuery):
     except (ValueError, IndexError):
         return await query.answer("list changed — reopen /radio", show_alert=True)
     chat_id = query.message.chat.id
+    thread_id = getattr(query.message, "message_thread_id", None)
     member = await c.get_chat_member(chat_id, query.from_user.id)
     if not can_manage_vc(member):
         return await query.answer("💡 admins (manage video chats) only", show_alert=True)
@@ -634,7 +639,8 @@ async def radio_tune(c: Client, query: CallbackQuery):
         await query.message.delete()
     except Exception:
         pass
-    card = await c.send_photo(chat_id, card_img or RADIO_IMG, caption=_caption(name, track), reply_markup=control_panel)
+    card = await c.send_photo(chat_id, card_img or RADIO_IMG, caption=_caption(name, track), reply_markup=control_panel,
+                              message_thread_id=thread_id)
     RADIO[chat_id] = {"msg": card, "stream": stream, "name": name, "track": track,
                       "last": _caption(name, track), "card": card_img}
 
