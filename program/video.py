@@ -151,6 +151,7 @@ async def vplay(c: Client, m: Message):
     await m.delete()
     replied = m.reply_to_message
     chat_id = m.chat.id
+    thread_id = m.message_thread_id if getattr(m, "topic_message", False) else None
     keyboard = control_panel
     # "/vplay ... mute" starts the stream with the assistant muted
     args = [a.lower() for a in m.command[1:]]
@@ -290,7 +291,7 @@ async def vplay(c: Client, m: Message):
                     "» reply to an **video file** or **give something to search.**"
                 )
             else:
-                loser = await c.send_message(chat_id, "🔍 **Searching...**")
+                loser = await c.send_message(chat_id, "🔍 **Searching...**", message_thread_id=thread_id)
                 query = m.text.split(None, 1)[1]
                 if start_muted and query.lower().endswith("mute"):
                     query = query[:-4].strip()
@@ -352,7 +353,7 @@ async def vplay(c: Client, m: Message):
                 "» reply to an **video file** or **give something to search.**"
             )
         else:
-            loser = await c.send_message(chat_id, "🔍 **Searching...**")
+            loser = await c.send_message(chat_id, "🔍 **Searching...**", message_thread_id=thread_id)
             query = m.text.split(None, 1)[1]
             search = ytsearch(query)
             Q = 720
@@ -411,6 +412,7 @@ async def vplay(c: Client, m: Message):
 async def vstream(c: Client, m: Message):
     await m.delete()
     chat_id = m.chat.id
+    thread_id = m.message_thread_id if getattr(m, "topic_message", False) else None
     keyboard = control_panel
     if m.sender_chat:
         return await m.reply_text("you're an __Anonymous__ Admin !\n\n» revert back to user account from admin rights.")
@@ -480,7 +482,7 @@ async def vstream(c: Client, m: Message):
         if len(m.command) == 2:
             link = m.text.split(None, 1)[1]
             Q = 720
-            loser = await c.send_message(chat_id, "🔄 **processing stream...**")
+            loser = await c.send_message(chat_id, "🔄 **processing stream...**", message_thread_id=thread_id)
         elif len(m.command) == 3:
             op = m.text.split(None, 1)[1]
             link = op.split(None, 1)[0]
@@ -492,7 +494,7 @@ async def vstream(c: Client, m: Message):
                 await m.reply(
                     "» __only 720, 480, 360 allowed__ \n💡 **now streaming video in 720p**"
                 )
-            loser = await c.send_message(chat_id, "🔄 **processing stream...**")
+            loser = await c.send_message(chat_id, "🔄 **processing stream...**", message_thread_id=thread_id)
         else:
             return await m.reply("**/vstream {link} {720/480/360}**")
 

@@ -439,7 +439,7 @@ async def cbseekpercent(_, query: CallbackQuery):
     await seek_current(chat_id, int(dur * pct / 100), VOLUME.get(chat_id, 100))
 
 
-async def _send_screenshot(c, chat_id, fail):
+async def _send_screenshot(c, chat_id, fail, thread_id=None):
     """Shared by the 📸 button and /screenshot. `fail` is an async (text)->None."""
     if chat_id not in QUEUE:
         return await fail("❌ nothing is playing.")
@@ -449,7 +449,7 @@ async def _send_screenshot(c, chat_id, fail):
     if not path:
         return await fail("🚫 couldn't capture a frame.")
     try:
-        await c.send_photo(chat_id, path, caption="📸 now playing")
+        await c.send_photo(chat_id, path, caption="📸 now playing", message_thread_id=thread_id)
     finally:
         try:
             os.remove(path)
@@ -461,9 +461,11 @@ async def _send_screenshot(c, chat_id, fail):
 async def cbsnap(c: Client, query: CallbackQuery):
     await query.answer("📸 capturing…")
     await _send_screenshot(c, query.message.chat.id,
-                           lambda t: query.answer(t, show_alert=True))
+                           lambda t: query.answer(t, show_alert=True),
+                           thread_id=getattr(query.message, "message_thread_id", None))
 
 
 @Client.on_message(command(["screenshot", f"screenshot@{BOT_USERNAME}", "snap"]) & other_filters)
 async def screenshot_cmd(c: Client, m: Message):
-    await _send_screenshot(c, m.chat.id, m.reply)
+    thread_id = m.message_thread_id if getattr(m, "topic_message", False) else None
+    await _send_screenshot(c, m.chat.id, m.reply, thread_id=thread_id)
