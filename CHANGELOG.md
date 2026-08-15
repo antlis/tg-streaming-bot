@@ -4,6 +4,12 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.7.1] — 2026-08-15
+### Fixed
+- **`/topic lock` did nothing** — threw an unhandled error on every attempt in a real forum group (`chat.type` is `ChatType.FORUM` there, not `GROUP`/`SUPERGROUP`, and the message attribute this kurigram version exposes is `topic_message`, not `is_topic_message`). Both are now recognized correctly.
+- **Radio/`/record` posting to "General"** instead of the topic the command came from — the final now-playing card and recording-completion messages were sent without the topic's thread id. Same fix applied to `/play`, `/vplay`, `/vstream`, and `/screenshot`'s status/result messages, which had the identical gap.
+- **Radio/IPTV queuing behind other content instead of playing immediately** — they're live broadcasts, not real queue items. Starting `/play`, `/vplay`, `/vstream`, `/library`, `/lplay`, or `/search` while radio/IPTV was active now interrupts it right away instead of silently queuing. `/iptv` itself is also now always-interrupt like `/radio` already was, instead of queuing behind existing content.
+
 ## [1.7.0] — 2026-08-15
 ### Added
 - **`/topic lock|unlock|status`** — restrict the bot to a single forum topic in a group; every other topic there (including "General") is then silently ignored. `/topic` itself always stays reachable so a chat can't get stuck locked. Lock/unlock require the "manage video chats" admin permission.
