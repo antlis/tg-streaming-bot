@@ -4,6 +4,15 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] — 2026-08-15
+### Added
+- **`/topic lock|unlock|status`** — restrict the bot to a single forum topic in a group; every other topic there (including "General") is then silently ignored. `/topic` itself always stays reachable so a chat can't get stuck locked. Lock/unlock require the "manage video chats" admin permission.
+
+### Fixed
+- Radio/IPTV stream hosts (`radiorecord.hostingradio.ru`, `streamguys1.com`, `radiofrance.fr`) failing to resolve with ffmpeg's "Failed to resolve hostname" — Docker's embedded DNS resolver was mishandling CNAME-chained answers for those hosts; the container now resolves via `1.1.1.1`/`8.8.8.8` directly.
+- `/radio` retries once on a transient `play()` failure (DNS blips, Telegram's `INTERDC_X_CALL_ERROR` on joining the voice chat).
+- IPTV: multi-variant HLS master playlists (e.g. Rutube) that confused ffmpeg 5.1 now resolve to a single variant before playing; added a browser User-Agent/Referer for CDNs that reject bare ffmpeg requests.
+
 ## [1.6.0] — 2026-06-24
 ### Added
 - **`/record START END`** — clip a specific time range from what's playing. Accepts `HH:MM:SS`, `MM:SS`, `Nh`/`Nm`/`Ns`, or plain seconds for both arguments (e.g. `/record 01:30:00 02:00:00` records 30 minutes starting at 1 h 30 m). Works for local files and downloaded YouTube tracks; for live HTTP streams (radio, IPTV) the start offset is ignored and only the duration (`END − START`) is used, with a note in the status message.

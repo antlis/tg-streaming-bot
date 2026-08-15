@@ -99,6 +99,7 @@ Two Telegram identities are required:
 | `/song <query>` · `/video <query>` | download instead of stream |
 | `/userbotjoin` `/userbotleave` · `/reload` | assistant join / leave · refresh admin cache |
 | `/ping` `/alive` `/uptime` | status checks |
+| `/topic lock\|unlock\|status` | restrict the bot to one forum topic in this group (admins) |
 
 ## Notes
 - YouTube playback **downloads first, then streams** (yt-dlp with the `android_vr` client; H.264+AAC mp4) — direct stream URLs are blocked by YouTube these days. Expect a short delay before playback starts.

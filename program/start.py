@@ -147,6 +147,7 @@ async def help_cmd(client: Client, message: Message):
         "• `/screenshot` — grab the current video frame · `/playlist` — the queue\n\n"
         "**⚙️ Setup / status**\n"
         "• `/userbotjoin` `/userbotleave` · `/reload`\n"
+        "• `/topic lock|unlock|status` — restrict the bot to one forum topic (admins)\n"
         "• `/ping` `/alive` `/uptime`",
         disable_web_page_preview=True,
     )
