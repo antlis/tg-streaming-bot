@@ -49,7 +49,13 @@ def authorized_users_only(func: Callable) -> Callable:
         if message.from_user.id in SUDO_USERS:
             return await func(client, message)
 
+        # pyrogram's message-cache can mutate a Message's .command back to
+        # None once another handler's filter check runs against the same
+        # cached object concurrently — easily triggered by this await. Snapshot
+        # it first and restore it so the wrapped handler sees it intact.
+        cmd_snapshot = message.command
         administrators = await get_administrators(message.chat)
+        message.command = cmd_snapshot
 
         for administrator in administrators:
             if administrator == message.from_user.id:

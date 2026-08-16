@@ -186,9 +186,11 @@ def _help_kb() -> InlineKeyboardMarkup:
 @Client.on_message(command(["iptv", f"iptv@{BOT_USERNAME}"]) & other_filters)
 @errors
 async def iptv_cmd(c: Client, m: Message):
+    # snapshot before any await — see program/music.py's play() for why
+    cmd_args = m.command
     await m.delete()
     chat_id = m.chat.id
-    query = m.text.split(None, 1)[1].strip() if len(m.command) > 1 else ""
+    query = m.text.split(None, 1)[1].strip() if len(cmd_args) > 1 else ""
 
     if not query:
         await m.reply(

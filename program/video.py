@@ -150,13 +150,19 @@ async def ytdl(link, status_msg=None):
 @Client.on_message(command(["vplay", f"vplay@{BOT_USERNAME}"]) & other_filters)
 @errors
 async def vplay(c: Client, m: Message):
+    # snapshot before any await: pyrogram's message-cache can mutate .command
+    # back to None on a cached Message once another handler's filter check
+    # runs against it concurrently, which happens easily once we start
+    # awaiting below (a bare `m.command` read later crashed with
+    # "TypeError: object of type 'NoneType' has no len()")
+    cmd_args = m.command
     await m.delete()
     replied = m.reply_to_message
     chat_id = m.chat.id
     thread_id = m.message_thread_id if getattr(m, "topic_message", False) else None
     keyboard = control_panel
     # "/vplay ... mute" starts the stream with the assistant muted
-    args = [a.lower() for a in m.command[1:]]
+    args = [a.lower() for a in cmd_args[1:]]
     start_muted = "mute" in args
     if m.sender_chat:
         return await m.reply_text("you're an __Anonymous__ Admin !\n\n» revert back to user account from admin rights.")
@@ -293,7 +299,7 @@ async def vplay(c: Client, m: Message):
                   await loser.delete()
                   await m.reply_text(f"🚫 error: `{ep}`")
         else:
-            if len(m.command) < 2:
+            if len(cmd_args) < 2:
                 await m.reply(
                     "» reply to an **video file** or **give something to search.**"
                 )
@@ -355,7 +361,7 @@ async def vplay(c: Client, m: Message):
                                 await m.reply_text(f"🚫 error: `{ep}`")
 
     else:
-        if len(m.command) < 2:
+        if len(cmd_args) < 2:
             await m.reply(
                 "» reply to an **video file** or **give something to search.**"
             )
@@ -418,6 +424,12 @@ async def vplay(c: Client, m: Message):
 @Client.on_message(command(["vstream", f"vstream@{BOT_USERNAME}"]) & other_filters)
 @errors
 async def vstream(c: Client, m: Message):
+    # snapshot before any await: pyrogram's message-cache can mutate .command
+    # back to None on a cached Message once another handler's filter check
+    # runs against it concurrently, which happens easily once we start
+    # awaiting below (a bare `m.command` read later crashed with
+    # "TypeError: object of type 'NoneType' has no len()")
+    cmd_args = m.command
     await m.delete()
     chat_id = m.chat.id
     thread_id = m.message_thread_id if getattr(m, "topic_message", False) else None
@@ -489,14 +501,14 @@ async def vstream(c: Client, m: Message):
     # set after the drop_*() calls above, which may clear_queue() (and with it
     # any stale ACTIVE_THREAD entry) before this session's is recorded
     set_active_thread(chat_id, thread_id)
-    if len(m.command) < 2:
+    if len(cmd_args) < 2:
         await m.reply("» give me a live-link/m3u8 url/youtube link to stream.")
     else:
-        if len(m.command) == 2:
+        if len(cmd_args) == 2:
             link = m.text.split(None, 1)[1]
             Q = 720
             loser = await c.send_message(chat_id, "🔄 **processing stream...**", message_thread_id=thread_id)
-        elif len(m.command) == 3:
+        elif len(cmd_args) == 3:
             op = m.text.split(None, 1)[1]
             link = op.split(None, 1)[0]
             quality = op.split(None, 1)[1]

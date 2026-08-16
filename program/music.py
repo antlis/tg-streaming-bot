@@ -148,6 +148,12 @@ async def ytdl(format: str, link: str, status_msg=None):
 @Client.on_message(command(["play", f"play@{BOT_USERNAME}"]) & other_filters)
 @errors
 async def play(c: Client, m: Message):
+    # snapshot before any await: pyrogram's message-cache can mutate .command
+    # back to None on a cached Message once another handler's filter check
+    # runs against it concurrently, which happens easily once we start
+    # awaiting below (a bare `m.command` read later crashed with
+    # "TypeError: object of type 'NoneType' has no len()")
+    cmd_args = m.command
     await m.delete()
     replied = m.reply_to_message
     chat_id = m.chat.id
@@ -279,7 +285,7 @@ async def play(c: Client, m: Message):
                 await suhu.delete()
                 await m.reply_text(f"🚫 error:\n\n» {e}")
         else:
-            if len(m.command) < 2:
+            if len(cmd_args) < 2:
                 await m.reply(
                     "» reply to an **audio file** or **give something to search.**"
                 )
@@ -334,7 +340,7 @@ async def play(c: Client, m: Message):
                                 await m.reply_text(f"🚫 error: `{ep}`")
 
     else:
-        if len(m.command) < 2:
+        if len(cmd_args) < 2:
             await m.reply(
                 "» reply to an **audio file** or **give something to search.**"
             )

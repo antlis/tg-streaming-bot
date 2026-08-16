@@ -4,6 +4,10 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.3] — 2026-08-16
+### Fixed
+- **`/play`, `/vplay`, `/vstream`, `/iptv` crashed on a YouTube link with `TypeError: object of type 'NoneType' has no len()`.** These handlers read `m.command` only after several `await`s (permission checks, assistant-join); pyrogram's message cache can reset a cached `Message`'s `.command` back to `None` when another handler's filter check runs against the same object concurrently, so by the time the code got around to reading it, it could already be gone. Now snapshotted before the first `await`. Also closed the same gap once at the source for every handler wrapped by `authorized_users_only` (`/skip`, `/volume`, `/record`, `/seek`), which had a smaller version of the same race via its own admin-list lookup.
+
 ## [1.8.2] — 2026-08-16
 ### Fixed
 - **`/library` audio/subtitle track selection silently dropped when the bot was already busy.** Picking a track then hitting ▶️ Play while something else was playing queued the raw, untouched file (default tracks, no subtitles) instead of your selection, with no indication it had done so. The selection is now transcoded in before queuing, so it's honored whenever it does play.
