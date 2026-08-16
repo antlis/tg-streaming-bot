@@ -11,7 +11,7 @@ from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
 from driver.decorators import errors
 from driver.filters import command, other_filters
-from driver.queues import QUEUE, add_to_queue, drop_if_live
+from driver.queues import QUEUE, add_to_queue, drop_if_live, set_active_thread
 from driver.clients import call_py, user
 from driver.transcode import prepare_for_stream
 from driver.utils import make_progress, control_panel, media_video, drop_stale_queue
@@ -222,6 +222,9 @@ async def vplay(c: Client, m: Message):
     await drop_stale_queue(chat_id)
     # radio/IPTV never hold a real queue slot — a new /vplay takes over now
     drop_if_live(chat_id)
+    # set after the drop_*() calls above, which may clear_queue() (and with it
+    # any stale ACTIVE_THREAD entry) before this session's is recorded
+    set_active_thread(chat_id, thread_id)
     if replied:
         if replied.video or replied.document:
             media = replied.video or replied.document
@@ -483,6 +486,9 @@ async def vstream(c: Client, m: Message):
     await drop_stale_queue(chat_id)
     # radio/IPTV never hold a real queue slot — a new /vstream takes over now
     drop_if_live(chat_id)
+    # set after the drop_*() calls above, which may clear_queue() (and with it
+    # any stale ACTIVE_THREAD entry) before this session's is recorded
+    set_active_thread(chat_id, thread_id)
     if len(m.command) < 2:
         await m.reply("» give me a live-link/m3u8 url/youtube link to stream.")
     else:

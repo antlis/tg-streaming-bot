@@ -3,7 +3,7 @@ import asyncio
 from config import BOT_USERNAME
 from driver.decorators import errors, errors_cb
 from driver.filters import command, other_filters
-from driver.queues import QUEUE, add_to_queue, drop_if_live
+from driver.queues import QUEUE, add_to_queue, drop_if_live, set_active_thread
 from driver.clients import call_py
 from config import MAX_QUEUE_SIZE
 from driver.utils import control_panel, media_audio, media_video, ensure_can_play
@@ -74,6 +74,7 @@ async def _play_choice(c, query, video):
             return await query.edit_message_text(f"❌ download failed:\n`{str(path)[:150]}`")
         stream, typ, Q = media_audio(path), "Audio", 0
     drop_if_live(chat_id)  # radio/IPTV never hold a real queue slot
+    set_active_thread(chat_id, getattr(query.message, "message_thread_id", None))
     if chat_id in QUEUE:
         pos = add_to_queue(chat_id, title[:70], path, url, typ, Q)
         if pos == -1:

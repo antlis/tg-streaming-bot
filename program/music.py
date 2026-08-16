@@ -13,7 +13,7 @@ from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
 from driver.decorators import errors
 from driver.filters import command, other_filters
-from driver.queues import QUEUE, add_to_queue, drop_if_live
+from driver.queues import QUEUE, add_to_queue, drop_if_live, set_active_thread
 from driver.clients import call_py, user
 from driver.utils import bash, make_progress, control_panel, media_audio, drop_stale_queue
 from pyrogram import Client
@@ -216,6 +216,9 @@ async def play(c: Client, m: Message):
     await drop_stale_queue(chat_id)
     # radio/IPTV never hold a real queue slot — a new /play takes over now
     drop_if_live(chat_id)
+    # set after the drop_*() calls above, which may clear_queue() (and with it
+    # any stale ACTIVE_THREAD entry) before this session's is recorded
+    set_active_thread(chat_id, thread_id)
     if replied:
         # audio sent as a generic file/document (e.g. a bare .mp3) counts too
         audio_doc = (

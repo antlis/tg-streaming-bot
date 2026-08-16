@@ -5,7 +5,7 @@ import logging
 from time import time
 from config import DOWNLOADS_CACHE_LIMIT_MB, ASSISTANT_NAME
 from driver.clients import bot, call_py, user
-from driver.queues import QUEUE, clear_queue, get_queue, pop_an_item, is_loop, is_autoplay, add_to_queue
+from driver.queues import QUEUE, clear_queue, get_queue, pop_an_item, is_loop, is_autoplay, add_to_queue, get_active_thread
 from pytgcalls import filters as call_filters
 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, ChatUpdate, StreamEnded
 from pyrogram.enums import ChatMemberStatus
@@ -470,7 +470,8 @@ async def _autoplay_next(chat_id):
         add_to_queue(chat_id, title[:70], path, link, "Audio", 0)
         recent.append(cid)
         del recent[:-30]
-        await bot.send_message(chat_id, f"🎶 **Auto-DJ ▸ up next:** {title[:60]}")
+        await bot.send_message(chat_id, f"🎶 **Auto-DJ ▸ up next:** {title[:60]}",
+                                message_thread_id=get_active_thread(chat_id))
         return True
     return False
 
@@ -499,6 +500,9 @@ async def maybe_prefetch_autoplay(chat_id):
 @call_py.on_update(call_filters.stream_end(StreamEnded.Type.AUDIO))
 async def stream_end_handler(_, update):
     chat_id = update.chat_id
+    # captured before skip_current_song()/clear_queue() below, which drop the
+    # chat's ACTIVE_THREAD entry once the session actually ends
+    thread_id = get_active_thread(chat_id)
     # loop mode: replay the current track instead of advancing
     if is_loop(chat_id):
         q = get_queue(chat_id)
@@ -522,11 +526,12 @@ async def stream_end_handler(_, update):
     log.info("stream ended in %s — advancing queue", chat_id)
     op = await skip_current_song(chat_id)
     if op == 1:
-        await bot.send_message(chat_id, "✅ streaming end")
+        await bot.send_message(chat_id, "✅ streaming end", message_thread_id=thread_id)
     elif op == 2:
-        await bot.send_message(chat_id, "❌ an error occurred\n\n» **Clearing** __Queues__ and leaving video chat.")
+        await bot.send_message(chat_id, "❌ an error occurred\n\n» **Clearing** __Queues__ and leaving video chat.",
+                                message_thread_id=thread_id)
     else:
-        await bot.send_message(chat_id, f"💡 **Streaming next track**\n\n🏷 **Name:** [{op[0]}]({op[1]}) | `{op[2]}`\n💭 **Chat:** `{chat_id}`", disable_web_page_preview=True, reply_markup=keyboard)
+        await bot.send_message(chat_id, f"💡 **Streaming next track**\n\n🏷 **Name:** [{op[0]}]({op[1]}) | `{op[2]}`\n💭 **Chat:** `{chat_id}`", disable_web_page_preview=True, reply_markup=keyboard, message_thread_id=thread_id)
     prune_downloads()
 
 

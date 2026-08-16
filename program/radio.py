@@ -10,7 +10,7 @@ import urllib.request
 from PIL import Image, ImageDraw, ImageFont
 from config import BOT_USERNAME, RADIO_IMG, TRANSCODE_HWACCEL
 from driver.filters import command, other_filters
-from driver.queues import QUEUE, add_to_queue, clear_queue, get_queue, set_live
+from driver.queues import QUEUE, add_to_queue, clear_queue, get_queue, set_live, set_active_thread
 from driver.clients import call_py
 from driver.decorators import authorized_users_only, errors, errors_cb
 from driver.utils import (
@@ -630,6 +630,7 @@ async def radio_tune(c: Client, query: CallbackQuery):
         clear_queue(chat_id)  # radio takes over — it's a single live stream
         add_to_queue(chat_id, name[:70], stream, url, "Audio", 0)
         set_live(chat_id, True)
+        set_active_thread(chat_id, thread_id)
     except Exception as e:
         msg = str(e)
         if "CreateGroupCall" in msg or "CHAT_ADMIN_REQUIRED" in msg:

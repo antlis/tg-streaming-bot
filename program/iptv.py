@@ -7,7 +7,7 @@ import logging
 from config import BOT_USERNAME
 from driver.decorators import errors, errors_cb
 from driver.filters import command, other_filters
-from driver.queues import add_to_queue, clear_queue, set_live
+from driver.queues import add_to_queue, clear_queue, set_live, set_active_thread
 from driver.utils import (
     can_manage_vc, control_panel, media_video,
     drop_stale_queue, ensure_assistant_in_chat,
@@ -333,6 +333,7 @@ async def iptv_pick(c: Client, query: CallbackQuery):
         clear_queue(chat_id)
         add_to_queue(chat_id, label, url, url, "Video", 0)
         set_live(chat_id, True)
+        set_active_thread(chat_id, thread_id)
         log.info("IPTV: play() succeeded for %s", label)
         await _finish(f"📺 **Now streaming:** {label}\n🔴 _Live IPTV_")
     except Exception as e:

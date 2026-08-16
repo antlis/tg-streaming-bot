@@ -10,7 +10,7 @@ import asyncio
 
 from config import BOT_USERNAME, IDLE_LEAVE_MINUTES
 from driver.clients import call_py, bot
-from driver.queues import QUEUE, RESUME, get_queue, save_resume, clear_queue, is_loop
+from driver.queues import QUEUE, RESUME, get_queue, save_resume, clear_queue, is_loop, get_active_thread
 from driver.filters import command, other_filters
 from driver.decorators import authorized_users_only, errors, errors_cb
 from driver.utils import can_manage_vc, control_panel, maybe_prefetch_autoplay
@@ -73,7 +73,8 @@ async def _auto_recover(chat_id, info, attempts):
     except Exception:
         res = None
     if res == -1:
-        await bot.send_message(chat_id, "⚠️ stream dropped and the cached file expired — replay the link.")
+        await bot.send_message(chat_id, "⚠️ stream dropped and the cached file expired — replay the link.",
+                                message_thread_id=get_active_thread(chat_id))
         RESUME.pop(chat_id, None)
         attempts[chat_id] = MAX_RECOVER
         return
@@ -84,6 +85,7 @@ async def _auto_recover(chat_id, info, attempts):
             f"🔄 **connection dropped — auto-resuming** [{info['name']}]({info['link']}) from `{_fmt(info['pos'])}`{suffix}",
             disable_web_page_preview=True,
             reply_markup=control_panel,
+            message_thread_id=get_active_thread(chat_id),
         )
 
 
@@ -123,10 +125,12 @@ async def track_position():
                     if n is not None and n <= 1:   # only the assistant left
                         empty[chat_id] = empty.get(chat_id, 0) + 30
                         if empty[chat_id] >= IDLE_LEAVE_MINUTES * 60:
+                            leave_thread = get_active_thread(chat_id)
                             await call_py.leave_call(chat_id)
                             clear_queue(chat_id)
                             empty.pop(chat_id, None)
-                            await bot.send_message(chat_id, "👋 Left the voice chat — no one was listening.")
+                            await bot.send_message(chat_id, "👋 Left the voice chat — no one was listening.",
+                                                    message_thread_id=leave_thread)
                             continue
                     else:
                         empty.pop(chat_id, None)
