@@ -1,122 +1,671 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tg-streaming-bot — music &amp; video in Telegram voice chats</title>
 <meta name="description" content="A self-hosted Telegram bot that streams music and video into group voice chats: YouTube, internet radio, your own media library, recording, and full playback controls.">
+<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
 <meta property="og:title" content="tg-streaming-bot">
 <meta property="og:description" content="Stream music &amp; video into Telegram group voice chats. YouTube, radio, local library, recording, and full controls — self-hosted and open source.">
 <meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎬</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --bg:#0d1117; --bg2:#11161d; --card:#161c25; --line:#222b38;
-    --fg:#e6edf3; --mut:#8b97a7; --accent:#2aabee; --accent2:#229ed9;
+  :root {
+    --bg: #fafafa;
+    --text: #1a1a1a;
+    --text-secondary: #555;
+    --border: #e5e5e5;
+    --card-bg: #fff;
+    --card-hover: #f5f5f5;
+    --accent: #E35206;
+    --accent-hover: #c44a0a;
+    --code-bg: #f3f3f3;
   }
-  *{box-sizing:border-box}
-  html{scroll-behavior:smooth}
-  body{
-    margin:0; background:var(--bg); color:var(--fg);
-    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    -webkit-font-smoothing:antialiased;
-  }
-  a{color:var(--accent); text-decoration:none}
-  a:hover{text-decoration:underline}
-  .wrap{max-width:1000px; margin:0 auto; padding:0 20px}
-  .btn{
-    display:inline-block; padding:12px 22px; border-radius:10px; font-weight:600;
-    background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff;
-  }
-  .btn:hover{text-decoration:none; opacity:.92}
-  .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--fg)}
 
-  /* hero */
-  header{
-    text-align:center; padding:90px 20px 70px;
-    background:radial-gradient(1200px 500px at 50% -10%, rgba(42,171,238,.18), transparent 60%);
-    border-bottom:1px solid var(--line);
+  [data-theme="dark"] {
+    --bg: #0a0a0a;
+    --text: #e5e5e5;
+    --text-secondary: #b0b0b0;
+    --border: #2a2a2a;
+    --card-bg: #111;
+    --card-hover: #1d1d1d;
+    --accent: #F77814;
+    --accent-hover: #f9a04f;
+    --code-bg: #0d0d0d;
   }
-  .logo{font-size:60px; line-height:1}
-  h1{font-size:44px; margin:14px 0 6px; letter-spacing:-.02em}
-  .tag{font-size:20px; color:var(--mut); max-width:620px; margin:0 auto 28px}
-  .cta{display:flex; gap:12px; justify-content:center; flex-wrap:wrap}
-  .stack{margin-top:30px; color:var(--mut); font-size:14px}
 
-  section{padding:64px 0; border-bottom:1px solid var(--line)}
-  h2{font-size:28px; margin:0 0 8px; letter-spacing:-.01em}
-  .sub{color:var(--mut); margin:0 0 32px}
+  * { box-sizing: border-box; margin: 0; }
 
-  .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px}
-  .card{
-    background:var(--card); border:1px solid var(--line); border-radius:14px;
-    padding:22px; transition:border-color .2s, transform .2s;
+  html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    scroll-behavior: smooth;
   }
-  .card:hover{border-color:var(--accent2); transform:translateY(-2px)}
-  .card .ico{font-size:26px}
-  .card h3{margin:10px 0 6px; font-size:18px}
-  .card p{margin:0; color:var(--mut); font-size:14.5px}
 
-  /* commands */
-  .cmds{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:24px}
-  .cmds h4{margin:0 0 10px; font-size:14px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent)}
-  .cmds ul{list-style:none; margin:0; padding:0}
-  .cmds li{padding:5px 0; color:var(--mut); font-size:14.5px}
-  code{
-    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:13px;
-    background:#0a0e14; border:1px solid var(--line); border-radius:6px; padding:1px 6px; color:#cdd9e5;
+  body {
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.7;
+    overflow-wrap: break-word;
   }
-  pre{
-    background:#0a0e14; border:1px solid var(--line); border-radius:12px;
-    padding:18px 20px; overflow:auto; font-size:13.5px; line-height:1.7;
-  }
-  pre code{background:none; border:none; padding:0}
-  ol.steps{padding-left:20px} ol.steps li{margin:0 0 14px}
 
-  footer{padding:40px 20px 60px; text-align:center; color:var(--mut); font-size:14px}
-  footer a{color:var(--mut); text-decoration:underline}
-  @media(max-width:560px){h1{font-size:34px} .tag{font-size:17px}}
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+    transition: color 0.2s;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
+    font-size: 0.85em;
+    padding: 0.15rem 0.4rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  /* ─── Nav ─── */
+  header {
+    border-bottom: 1px solid var(--border);
+  }
+
+  nav {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1rem clamp(1rem, 3vw, 2rem);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text);
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--text);
+    color: var(--bg);
+    display: grid;
+    place-items: center;
+    font-size: 16px;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+  }
+
+  .nav-link {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: color 0.2s;
+  }
+
+  .nav-link:hover, .nav-link.active { color: var(--text); }
+
+  .nav-end {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.35rem;
+    padding: 0.48rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.15s ease, box-shadow 0.15s ease;
+    cursor: pointer;
+    text-decoration: none;
+  }
+
+  .btn:hover { text-decoration: none; transform: translateY(-1px); }
+
+  .btn-primary {
+    color: var(--bg);
+    background: var(--text);
+    border-color: var(--text);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 14px 30px color-mix(in srgb, var(--text) 22%, transparent);
+  }
+
+  .btn-secondary {
+    background: var(--card-bg);
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--text-secondary);
+    background: var(--card-hover);
+  }
+
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+  }
+
+  .theme-toggle:hover {
+    color: var(--text);
+    border-color: var(--text-secondary);
+  }
+
+  .theme-toggle .icon-sun { display: none; }
+  .theme-toggle .icon-moon { display: block; }
+
+  [data-theme="light"] .theme-toggle .icon-sun { display: block; }
+  [data-theme="light"] .theme-toggle .icon-moon { display: none; }
+
+  .menu-toggle {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    z-index: 11;
+  }
+
+  .hamburger,
+  .hamburger::before,
+  .hamburger::after {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: var(--text);
+    border-radius: 1px;
+    transition: transform 0.3s, opacity 0.3s;
+  }
+
+  .hamburger { position: relative; }
+
+  .hamburger::before,
+  .hamburger::after {
+    content: '';
+    position: absolute;
+    left: 0;
+  }
+
+  .hamburger::before { top: -6px; }
+  .hamburger::after { top: 6px; }
+
+  .menu-toggle[aria-expanded="true"] .hamburger { background: transparent; }
+  .menu-toggle[aria-expanded="true"] .hamburger::before { top: 0; transform: rotate(45deg); }
+  .menu-toggle[aria-expanded="true"] .hamburger::after { top: 0; transform: rotate(-45deg); }
+
+  .mobile-menu {
+    display: none;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+  }
+
+  @media (max-width: 640px) {
+    nav {
+      flex-wrap: wrap;
+      padding: 0.75rem 1rem;
+      justify-content: flex-start;
+      gap: 0;
+    }
+    .nav-links { display: none; }
+    .nav-end {
+      display: flex;
+      margin-left: auto;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .menu-toggle { display: flex; }
+    .mobile-menu {
+      display: block;
+      width: 100%;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.3s ease, opacity 0.3s ease, padding-top 0.3s ease;
+    }
+    .mobile-menu.open {
+      max-height: 400px;
+      opacity: 1;
+      padding-top: 0.75rem;
+    }
+    .mobile-links {
+      display: flex;
+      flex-direction: column;
+      margin: 0 -1rem -1rem;
+      border-top: 1px solid var(--border);
+    }
+    .mobile-link {
+      display: block;
+      padding: 0.75rem 1rem;
+      font-size: 1rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+      transition: color 0.2s;
+    }
+    .mobile-link:last-child { border-bottom: none; }
+    .mobile-link:hover, .mobile-link.active { color: var(--text); }
+  }
+
+  /* ─── Main ─── */
+  main {
+    flex: 1;
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 clamp(1rem, 3vw, 2rem);
+  }
+
+  /* ─── Hero ─── */
+  .hero {
+    padding: 3rem 0 2.75rem;
+    text-align: left;
+  }
+
+  .hero h1 {
+    font-size: clamp(2.35rem, 1.7rem + 3vw, 4rem);
+    font-weight: 600;
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+    max-width: 15ch;
+    margin-bottom: 1rem;
+    text-wrap: balance;
+    color: var(--text);
+  }
+
+  .hero p {
+    max-width: 620px;
+    font-size: clamp(1.05rem, 1rem + 0.25vw, 1.15rem);
+    line-height: 1.7;
+    color: var(--text-secondary);
+  }
+
+  .hero p strong { color: var(--text); font-weight: 600; }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    margin-top: 1.4rem;
+  }
+
+  .stack {
+    margin-top: 1.5rem;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  /* ─── Section ─── */
+  section {
+    padding: 2rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1.15rem;
+    gap: 1rem;
+  }
+
+  .section-header h2 {
+    font-size: clamp(1.25rem, 1.1rem + 0.75vw, 1.5rem);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+
+  .lead {
+    color: var(--text-secondary);
+    max-width: 620px;
+    margin-bottom: 1.5rem;
+    font-size: clamp(1rem, 0.95rem + 0.25vw, 1.1rem);
+    line-height: 1.7;
+  }
+
+  /* ─── Feature Cards ─── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+
+  .card {
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-bg);
+    transition: border-color 0.2s, transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  @media (hover: hover) {
+    .card:hover {
+      border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+      transform: translateY(-1px);
+      box-shadow: 0 14px 34px color-mix(in srgb, #000 8%, transparent);
+    }
+  }
+
+  .tile {
+    display: inline-grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    font-size: 1.1rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .card h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+    color: var(--text);
+  }
+
+  .card p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .card code { color: var(--accent); }
+
+  /* ─── Commands ─── */
+  .cmd-groups {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    margin-top: 1.5rem;
+    align-items: start;
+  }
+
+  .group h4 {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 0.65rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .group ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .group li {
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+  }
+
+  .group li:last-child { border-bottom: none; }
+
+  .group li code {
+    color: var(--accent);
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: 0.82rem;
+  }
+
+  /* ─── Steps ─── */
+  .steps {
+    counter-reset: step;
+    display: grid;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .step > div { min-width: 0; }
+
+  .step .n {
+    counter-increment: step;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
+    font-weight: 700;
+    font-size: 0.85rem;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    color: var(--accent);
+  }
+
+  .step .n::before { content: counter(step); }
+
+  .step h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0.35rem 0 0.4rem;
+    color: var(--text);
+  }
+
+  .note {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  /* ─── Code blocks ─── */
+  pre {
+    max-width: 100%;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
+    font-size: 0.85rem;
+    line-height: 1.75;
+    color: var(--text);
+    margin: 0 0 0.75rem;
+  }
+
+  pre .c { color: var(--text-secondary); }
+  pre .p { color: var(--accent); }
+
+  /* ─── Footer ─── */
+  footer {
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+  }
+
+  .footer-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem clamp(1rem, 3vw, 2rem);
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .copyright {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  .footer-links a {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    transition: color 0.2s;
+  }
+
+  .footer-links a:hover { color: var(--text); }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 920px) {
+    .grid { grid-template-columns: repeat(2, 1fr); }
+    .cmd-groups { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 640px) {
+    .hero { padding: 2rem 0; text-align: center; }
+    .hero h1 { max-width: none; }
+    .hero p { margin-inline: auto; }
+    .hero-actions { justify-content: center; }
+    .stack { text-align: center; }
+    section { padding: 1.5rem 0; }
+    .grid { grid-template-columns: 1fr; }
+    .cmd-groups { grid-template-columns: 1fr; }
+    .btn { width: 100%; justify-content: center; }
+    footer { margin-top: 1rem; }
+    .footer-inner {
+      flex-direction: column;
+      text-align: center;
+      gap: 1rem;
+    }
+    .footer-links { justify-content: center; }
+  }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="wrap">
-    <div class="logo">🎬</div>
-    <h1>tg-streaming-bot</h1>
-    <p class="tag">A self-hosted Telegram bot that streams <strong>music &amp; video</strong> straight into your group's voice chat.</p>
-    <div class="cta">
-      <a class="btn" href="https://github.com/antlis/tg-streaming-bot">View on GitHub</a>
-      <a class="btn ghost" href="#quickstart">Deploy your own</a>
+  <nav>
+    <a href="#" class="logo" aria-label="tg-streaming-bot home">
+      <span class="logo-icon">🎬</span>
+      tg-streaming-bot
+    </a>
+
+    <div class="nav-links">
+      <a href="#features" class="nav-link active">Features</a>
+      <a href="#commands" class="nav-link">Commands</a>
+      <a href="#quickstart" class="nav-link">Quick start</a>
     </div>
-    <div class="stack">Built with Pyrogram&nbsp;·&nbsp;py-tgcalls&nbsp;·&nbsp;ffmpeg&nbsp;·&nbsp;yt-dlp</div>
-  </div>
+
+    <div class="nav-end">
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+        <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a class="btn btn-secondary" href="https://github.com/antlis/tg-streaming-bot" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">GitHub</a>
+      <button class="menu-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+        <span class="hamburger"></span>
+      </button>
+    </div>
+
+    <div class="mobile-menu" id="mobile-menu" aria-hidden="true" inert>
+      <div class="mobile-links">
+        <a href="#features" class="mobile-link active">Features</a>
+        <a href="#commands" class="mobile-link">Commands</a>
+        <a href="#quickstart" class="mobile-link">Quick start</a>
+        <a href="https://github.com/antlis/tg-streaming-bot" class="mobile-link">GitHub</a>
+      </div>
+    </div>
+  </nav>
 </header>
 
-<section id="features">
-  <div class="wrap">
-    <h2>Everything you'd want in a voice-chat player</h2>
-    <p class="sub">One bot + a dedicated assistant account join the call and stream — you control it all from chat.</p>
-    <div class="grid">
-      <div class="card"><div class="ico">🎵</div><h3>YouTube &amp; files</h3><p>Play from a search query, a direct URL, or any audio file posted in the chat.</p></div>
-      <div class="card"><div class="ico">🎬</div><h3>Video &amp; live</h3><p>Stream videos and live sources (m3u8, YouTube-live) with selectable 720/480/360 quality.</p></div>
-      <div class="card"><div class="ico">🔎</div><h3>Search picker</h3><p><code>/search</code> lists the top results as buttons — pick one to play as audio or video.</p></div>
-      <div class="card"><div class="ico">📻</div><h3>Internet radio</h3><p>Dozens of built-in stations with the live now-playing track shown on the video feed.</p></div>
-      <div class="card"><div class="ico">📺</div><h3>Live TV (IPTV)</h3><p><code>/iptv &lt;name&gt;</code> searches 50 000+ channels from the <a href="https://github.com/iptv-org/iptv">iptv-org</a> public catalogue — tap a result to stream live, with the channel logo shown.</p></div>
-      <div class="card"><div class="ico">📼</div><h3>Recording</h3><p>Record the radio or a video stream to a voice/video message — stop anytime, with a live tracklist.</p></div>
-      <div class="card"><div class="ico">📁</div><h3>Local library</h3><p>Browse and play your own media folders, with audio-track and subtitle selection at play time.</p></div>
-      <div class="card"><div class="ico">🎛️</div><h3>Full controls</h3><p>Pause, skip, seek (+ 25/50/75% jumps), master volume, mute, loop, shuffle, queue, and 📸 screenshots — all from one inline panel or <code>/info</code>.</p></div>
-      <div class="card"><div class="ico">⚡</div><h3>Hardware transcoding</h3><p>VAAPI GPU or CPU transcoding handles HEVC/MKV and anything the stream engine can't take raw.</p></div>
-      <div class="card"><div class="ico">🔁</div><h3>Self-healing</h3><p>Auto-reconnects after a drop, resumes the last track after a restart, and leaves when idle.</p></div>
+<main>
+  <section class="hero">
+    <h1>Stream music &amp; video into voice chats</h1>
+    <p>A self-hosted Telegram bot that streams <strong>music &amp; video</strong> straight into your group's voice chat — YouTube, radio, local files, live TV, recording, and full playback controls.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://github.com/antlis/tg-streaming-bot">View on GitHub</a>
+      <a class="btn btn-secondary" href="#quickstart">Deploy your own</a>
     </div>
-  </div>
-</section>
+    <div class="stack">Pyrogram · py-tgcalls · ffmpeg · yt-dlp</div>
+  </section>
 
-<section id="commands">
-  <div class="wrap">
-    <h2>Commands</h2>
-    <p class="sub">A few of the essentials — full list in the bot via <code>/help</code>.</p>
-    <div class="cmds">
-      <div>
+  <section id="features">
+    <div class="section-header">
+      <h2>Features</h2>
+    </div>
+    <p class="lead">One bot + a dedicated assistant account join the call and stream — you control it all from chat.</p>
+
+    <div class="grid">
+      <div class="card"><span class="tile">🎵</span><h3>YouTube &amp; files</h3><p>Play from a search query, a direct URL, or any audio file posted in the chat.</p></div>
+      <div class="card"><span class="tile">🎬</span><h3>Video &amp; live</h3><p>Stream videos and live sources (m3u8, YouTube-live) with selectable 720/480/360 quality.</p></div>
+      <div class="card"><span class="tile">🔎</span><h3>Search picker</h3><p><code>/search</code> lists the top results as buttons — pick one to play as audio or video.</p></div>
+      <div class="card"><span class="tile">📻</span><h3>Internet radio</h3><p>Dozens of built-in stations with the live now-playing track shown on the video feed.</p></div>
+      <div class="card"><span class="tile">📺</span><h3>Live TV (IPTV)</h3><p><code>/iptv &lt;name&gt;</code> searches 50 000+ channels from the <a href="https://github.com/iptv-org/iptv" style="color: var(--accent);">iptv-org</a> public catalogue — tap a result to stream live.</p></div>
+      <div class="card"><span class="tile">📼</span><h3>Recording</h3><p>Record the radio or a video stream to a voice/video message — stop anytime, with a live tracklist.</p></div>
+      <div class="card"><span class="tile">📁</span><h3>Local library</h3><p>Browse and play your own media folders, with audio-track and subtitle selection at play time.</p></div>
+      <div class="card"><span class="tile">🎛️</span><h3>Full controls</h3><p>Pause, skip, seek (+ 25/50/75% jumps), master volume, mute, loop, shuffle, queue, and screenshots — all from one inline panel or <code>/info</code>.</p></div>
+      <div class="card"><span class="tile">⚡</span><h3>Hardware transcoding</h3><p>VAAPI GPU or CPU transcoding handles HEVC/MKV and anything the stream engine can't take raw.</p></div>
+      <div class="card"><span class="tile">🔁</span><h3>Self-healing</h3><p>Auto-reconnects after a drop, resumes the last track after a restart, and leaves when idle.</p></div>
+    </div>
+  </section>
+
+  <section id="commands">
+    <div class="section-header">
+      <h2>Commands</h2>
+    </div>
+    <p class="lead">A few of the essentials — full list in the bot via <code>/help</code>.</p>
+
+    <div class="cmd-groups">
+      <div class="group">
         <h4>Play</h4>
         <ul>
           <li><code>/play &lt;query|url&gt;</code> — music</li>
@@ -128,7 +677,7 @@
           <li><code>/library</code> · <code>/lplay</code> — local media</li>
         </ul>
       </div>
-      <div>
+      <div class="group">
         <h4>Control</h4>
         <ul>
           <li><code>/pause</code> <code>/resume</code> <code>/skip</code> <code>/stop</code></li>
@@ -138,49 +687,119 @@
           <li><code>/info</code> — now playing + controls</li>
         </ul>
       </div>
-      <div>
+      <div class="group">
         <h4>Capture &amp; setup</h4>
         <ul>
-          <li><code>/record [duration | START END]</code> · <code>/stoprec</code> — record audio/video or clip a range</li>
+          <li><code>/record [duration | START END]</code> · <code>/stoprec</code></li>
           <li><code>/screenshot</code> — grab the current frame</li>
           <li><code>/song</code> · <code>/video</code> — download</li>
           <li><code>/userbotjoin</code> · <code>/reload</code></li>
-          <li><code>/topic lock|unlock|status</code> — restrict to one forum topic</li>
+          <li><code>/topic lock|unlock|status</code> — forum topic restriction</li>
           <li><code>/alive</code> · <code>/ping</code></li>
         </ul>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section id="quickstart">
-  <div class="wrap">
-    <h2>Quick start</h2>
-    <p class="sub">Runs anywhere Docker does. You'll need a bot token, Telegram API credentials, and a session string for the assistant account.</p>
-    <ol class="steps">
-      <li>Clone and configure:
-        <pre><code>git clone https://github.com/antlis/tg-streaming-bot.git
+  <section id="quickstart">
+    <div class="section-header">
+      <h2>Quick start</h2>
+    </div>
+    <p class="lead">Runs anywhere Docker does. You'll need a bot token, Telegram API credentials, and a session string for the assistant account.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="n"></div>
+        <div>
+          <h3>Clone and configure</h3>
+<pre><code>git clone https://github.com/antlis/tg-streaming-bot.git
 cd tg-streaming-bot
-cp example.env .env   # fill in the Required block</code></pre>
-      </li>
-      <li>Build &amp; run:
-        <pre><code>docker compose up -d --build</code></pre>
-      </li>
-      <li>In your group: add the bot as admin, start a voice chat, then <code>/userbotjoin</code> and <code>/play &lt;song&gt;</code>.</li>
-    </ol>
-    <p>Full setup, configuration reference, and notes on running where Telegram is filtered are in the
-       <a href="https://github.com/antlis/tg-streaming-bot#readme">README</a>.</p>
-  </div>
-</section>
+cp example.env .env   <span class="c"># fill in the Required block</span></code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n"></div>
+        <div>
+          <h3>Build &amp; run</h3>
+<pre><code><span class="p">docker</span> compose up -d --build</code></pre>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n"></div>
+        <div>
+          <h3>Play something</h3>
+          <p class="note">In your group: add the bot as admin, start a voice chat, then <code>/userbotjoin</code> and <code>/play &lt;song&gt;</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="note">Full setup, configuration reference, and notes on running where Telegram is filtered are in the <a href="https://github.com/antlis/tg-streaming-bot#readme" style="color: var(--accent);">README</a>.</p>
+  </section>
+</main>
 
 <footer>
-  <div class="wrap">
-    <p><a href="https://github.com/antlis/tg-streaming-bot">GitHub</a> &nbsp;·&nbsp;
-       <a href="https://github.com/antlis/tg-streaming-bot/blob/main/CONTRIBUTING.md">Contributing</a> &nbsp;·&nbsp;
-       <a href="https://github.com/antlis/tg-streaming-bot/blob/main/LICENSE">License</a></p>
-    <p>Open source · self-hosted · not affiliated with Telegram.</p>
+  <div class="footer-inner">
+    <p class="copyright">Open source · self-hosted · not affiliated with Telegram.</p>
+    <div class="footer-links">
+      <a href="https://github.com/antlis/tg-streaming-bot">GitHub</a>
+      <a href="https://github.com/antlis/tg-streaming-bot/blob/main/CONTRIBUTING.md">Contributing</a>
+      <a href="https://github.com/antlis/tg-streaming-bot/blob/main/LICENSE">License</a>
+    </div>
   </div>
 </footer>
 
+<script>
+  // Theme toggle
+  const toggle = document.getElementById('theme-toggle');
+  const html = document.documentElement;
+
+  toggle.addEventListener('click', () => {
+    const current = html.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+  });
+
+  // Mobile menu
+  const menuToggle = document.querySelector('.menu-toggle');
+  const mobileMenu = document.getElementById('mobile-menu');
+
+  menuToggle.addEventListener('click', () => {
+    const expanded = menuToggle.getAttribute('aria-expanded') === 'true';
+    menuToggle.setAttribute('aria-expanded', String(!expanded));
+    mobileMenu.setAttribute('aria-hidden', String(expanded));
+    mobileMenu.toggleAttribute('inert', expanded);
+    mobileMenu.classList.toggle('open', !expanded);
+  });
+
+  mobileMenu.querySelectorAll('.mobile-link').forEach(link => {
+    link.addEventListener('click', () => {
+      menuToggle.setAttribute('aria-expanded', 'false');
+      mobileMenu.setAttribute('aria-hidden', 'true');
+      mobileMenu.toggleAttribute('inert', true);
+      mobileMenu.classList.remove('open');
+    });
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && menuToggle.getAttribute('aria-expanded') === 'true') {
+      menuToggle.setAttribute('aria-expanded', 'false');
+      mobileMenu.setAttribute('aria-hidden', 'true');
+      mobileMenu.toggleAttribute('inert', true);
+      mobileMenu.classList.remove('open');
+      menuToggle.focus();
+    }
+  });
+
+  // Smooth scroll for nav links
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', (e) => {
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  });
+</script>
 </body>
 </html>
