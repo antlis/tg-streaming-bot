@@ -4,6 +4,10 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.4] — 2026-08-16
+### Fixed
+- **The actual cause of 1.8.3's `TypeError: NoneType has no len()`**, which turned out not to be fixed by that release for chats with topic lock active. Root cause: `other_filters` (part of every command handler's filter chain) checked for `/topic` using pyrogram's `filters.command()`, which mutates `message.command` as a side effect of every check it runs — including non-matches. Since `other_filters` is ANDed in *after* the handler's own `command([...])` filter already matched and set `message.command` correctly, that check clobbered it back to `None` before the handler ever ran, 100% reproducibly, in any topic-locked chat. Replaced with a plain non-mutating text match. The 1.8.3 snapshot-before-await changes stay in place as defense in depth but weren't the real fix.
+
 ## [1.8.3] — 2026-08-16
 ### Fixed
 - **`/play`, `/vplay`, `/vstream`, `/iptv` crashed on a YouTube link with `TypeError: object of type 'NoneType' has no len()`.** These handlers read `m.command` only after several `await`s (permission checks, assistant-join); pyrogram's message cache can reset a cached `Message`'s `.command` back to `None` when another handler's filter check runs against the same object concurrently, so by the time the code got around to reading it, it could already be gone. Now snapshotted before the first `await`. Also closed the same gap once at the source for every handler wrapped by `authorized_users_only` (`/skip`, `/volume`, `/record`, `/seek`), which had a smaller version of the same race via its own admin-list lookup.

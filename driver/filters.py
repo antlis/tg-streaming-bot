@@ -1,3 +1,4 @@
+import re
 from time import monotonic
 from typing import List, Union
 
@@ -10,7 +11,25 @@ from driver.queues import TOPIC_LOCK
 
 # /topic itself must always get through, locked or not — otherwise a chat that
 # locks the "wrong" topic (or the one someone later deletes) can't undo it.
-_topic_cmd = filters.command(["topic", f"topic@{BOT_USERNAME}"], COMMAND_PREFIXES)
+#
+# This deliberately does NOT use pyrogram's filters.command(): that filter
+# mutates message.command as a side effect of every check (resets it to None,
+# then repopulates it only on a match) — and since this check runs as part of
+# other_filters, which every handler's filter chain ANDs in *after* its own
+# command([...]) filter already matched and set message.command correctly, it
+# would clobber that back to None before the handler ever sees it (every
+# command handler crashed with "NoneType has no len()" in any topic-locked
+# chat). A plain, non-mutating text match avoids that entirely.
+_topic_cmd_re = re.compile(
+    r"^(?:" + "|".join(re.escape(p) for p in COMMAND_PREFIXES) + r")"
+    rf"topic(?:@{re.escape(BOT_USERNAME)})?(?:\s|$)",
+    re.IGNORECASE,
+)
+
+
+def _is_topic_command(m):
+    text = m.text or m.caption
+    return bool(text and _topic_cmd_re.match(text))
 
 
 async def _topic_ok(_, client, m):
@@ -19,7 +38,7 @@ async def _topic_ok(_, client, m):
     locked = TOPIC_LOCK.get(m.chat.id)
     if locked is None:
         return True
-    if await _topic_cmd(client, m):
+    if _is_topic_command(m):
         return True
     thread_id = m.message_thread_id if getattr(m, "topic_message", False) else None
     return thread_id == locked
