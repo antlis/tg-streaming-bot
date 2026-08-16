@@ -263,20 +263,23 @@ async def lib_go_cb(c: Client, query: CallbackQuery):
     drop_if_live(chat_id)  # radio/IPTV never hold a real queue slot
     set_active_thread(chat_id, getattr(query.message, "message_thread_id", None))
     name = sel["name"]
-    if chat_id in QUEUE:
-        # busy: queue the original (default tracks) — selection applies to immediate plays
-        pos = add_to_queue(chat_id, name[:70], sel["src"], sel["src"], "Video", 720)
-        if pos == -1:
-            return await query.edit_message_text(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
-        return await query.edit_message_text(f"💡 **Queued #{pos}:** `{name[:60]}`", reply_markup=control_panel)
+    subtxt = "" if sel["sub"] is None else " · subs on"
     try:
         await query.edit_message_text(f"🎬 preparing `{name[:50]}`…")
+        # Transcode the picked audio/subtitle track up front, busy or not — the
+        # queue only stores a ready-to-stream path, so if we queued sel["src"]
+        # (the raw file) instead, the selection would be silently lost and
+        # playback would fall back to the file's default tracks.
         ready = await transcode_selection(
             sel["src"], sel["audio"], sel["sub"], sel["sub_ord"], sel["sub_image"], query.message,
         )
+        if chat_id in QUEUE:
+            pos = add_to_queue(chat_id, name[:70], ready, ready, "Video", 720)
+            if pos == -1:
+                return await query.edit_message_text(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
+            return await query.edit_message_text(f"💡 **Queued #{pos}:** `{name[:60]}`{subtxt}", reply_markup=control_panel)
         await call_py.play(chat_id, media_video(ready, 720))
         add_to_queue(chat_id, name[:70], ready, ready, "Video", 720)
-        subtxt = "" if sel["sub"] is None else " · subs on"
         await query.edit_message_text(f"🎬 **Now playing:** `{name[:60]}`{subtxt}", reply_markup=control_panel)
     except Exception as e:
         await query.edit_message_text(f"🚫 error: `{e}`")

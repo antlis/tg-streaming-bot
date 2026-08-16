@@ -4,6 +4,10 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.2] — 2026-08-16
+### Fixed
+- **`/library` audio/subtitle track selection silently dropped when the bot was already busy.** Picking a track then hitting ▶️ Play while something else was playing queued the raw, untouched file (default tracks, no subtitles) instead of your selection, with no indication it had done so. The selection is now transcoded in before queuing, so it's honored whenever it does play.
+
 ## [1.8.1] — 2026-08-16
 ### Fixed
 - **End-of-stream messages ("streaming end", auto-DJ, auto-resume-after-drop, idle-leave) always posted to "General"**, ignoring topic lock — they fire from a pytgcalls lifecycle event, not a Telegram message, so there was never a thread id to read. A new per-chat "active thread" tracker records which topic the current playback session started from, and all background-task messages now post there instead.
