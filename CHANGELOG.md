@@ -4,6 +4,10 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.8] — 2026-08-21
+### Fixed
+- **Proactive bot messages (auto-resume, stream-end, autoplay-next, idle-leave) could leak into "General" in a topic-locked group instead of the locked topic.** These all send via `get_active_thread(chat_id)`, which was tracked purely per-play from the triggering command's `message_thread_id` — a separate, non-persisted mechanism from `/topic lock`. If that capture ever came back empty (e.g. a `/vplay` processed during a connection reconnect, where pyrogram's catch-up update can be missing topic metadata), every background message for that session fell back to no thread at all. `get_active_thread()` now prefers `TOPIC_LOCK` when the chat has one set — by definition of the lock, any command that could have started the session had to come from that topic anyway — and only falls back to the per-play capture for unlocked chats.
+
 ## [1.8.7] — 2026-08-21
 ### Fixed
 - **The actual cause of 1.8.6's auto-unpause**, which turned out not to be fully fixed by that release. The `.playback` attribute fix was correct but not sufficient: pytgcalls reports a genuinely paused stream's `playback` as `Status.IDLE`, not `Status.PAUSED` (confirmed via live logging), so it's indistinguishable from a dropped stream — no attribute-based check can tell them apart. Pause state is now tracked explicitly (`driver.queues.PAUSED`, set by `/pause`/`/resume` and their panel buttons) instead of inferred from ntgcalls' own state. `/info`'s Paused/Playing status now reads the same explicit flag.

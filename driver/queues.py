@@ -30,6 +30,16 @@ def set_active_thread(chat_id, thread_id):
 
 
 def get_active_thread(chat_id):
+    # TOPIC_LOCK (set further down) wins when present: it's persisted and,
+    # by definition of the lock, every command that could have started this
+    # session had to come from that topic anyway. ACTIVE_THREAD's per-play
+    # capture is the fallback for unlocked chats — and a safety net for the
+    # rare case a reconnect-time update is missing topic metadata and the
+    # capture came back empty, which used to leak proactive messages
+    # (auto-resume, stream-end, autoplay) into "General" in locked groups.
+    locked = TOPIC_LOCK.get(chat_id)
+    if locked is not None:
+        return locked
     return ACTIVE_THREAD.get(chat_id)
 
 
