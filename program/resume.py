@@ -7,16 +7,19 @@ same media seeked to the saved position via ffmpeg `-ss`.
 """
 import os
 import asyncio
+import logging
 
 from config import BOT_USERNAME, IDLE_LEAVE_MINUTES
 from driver.clients import call_py, bot
-from driver.queues import QUEUE, RESUME, get_queue, save_resume, clear_queue, is_loop, get_active_thread
+from driver.queues import QUEUE, RESUME, get_queue, save_resume, clear_queue, is_loop, get_active_thread, is_paused
 from driver.filters import command, other_filters
 from driver.decorators import authorized_users_only, errors, errors_cb
 from driver.utils import can_manage_vc, control_panel, maybe_prefetch_autoplay
-from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, Call
+from pytgcalls.types import MediaStream, AudioQuality, VideoQuality
 from pyrogram import Client, filters
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+
+log = logging.getLogger(__name__)
 
 _VQ = {720: VideoQuality.HD_720p, 480: VideoQuality.SD_480p, 360: VideoQuality.SD_360p}
 
@@ -68,6 +71,8 @@ async def _auto_recover(chat_id, info, attempts):
     if attempts.get(chat_id, 0) >= MAX_RECOVER:
         return  # already gave up; stays quiet until the stream recovers on its own
     attempts[chat_id] = attempts.get(chat_id, 0) + 1
+    log.info("watchdog: auto-recovering %s (attempt %s/%s) from saved pos %s",
+              chat_id, attempts[chat_id], MAX_RECOVER, info.get("pos"))
     try:
         res = await resume_last(chat_id)
     except Exception:
@@ -135,19 +140,21 @@ async def track_position():
                     else:
                         empty.pop(chat_id, None)
 
-                # case 1: ntgcalls has no live call for this chat -> dropped
-                if call is None:
-                    seen.pop(chat_id, None)
-                    await _auto_recover(chat_id, RESUME.get(chat_id, {"name": head[0], "link": head[2], "pos": 0}), attempts)
+                # don't penalise a deliberately paused stream. This has to be
+                # tracked explicitly (see driver.queues.PAUSED) rather than
+                # inferred from ntgcalls' own state — a paused call has been
+                # observed reporting playback=Status.IDLE, indistinguishable
+                # from a genuinely dropped one, which used to make the
+                # watchdog "auto-recover" a paused stream ~15s later.
+                if is_paused(chat_id):
+                    seen[chat_id] = (None, 0)
                     continue
 
-                # don't penalise a deliberately paused stream
-                # (Call has no `.status` — playback state lives on `.playback`;
-                # the wrong attribute name here meant this check always silently
-                # missed, so a paused stream got treated as a stall and
-                # auto-resumed itself ~15s later, from a slightly stale position)
-                if getattr(call, "playback", None) == Call.Status.PAUSED:
-                    seen[chat_id] = (None, 0)
+                # case 1: ntgcalls has no live call for this chat -> dropped
+                if call is None:
+                    log.info("watchdog: %s has no live call in call_py.calls — treating as dropped", chat_id)
+                    seen.pop(chat_id, None)
+                    await _auto_recover(chat_id, RESUME.get(chat_id, {"name": head[0], "link": head[2], "pos": 0}), attempts)
                     continue
 
                 pos = await call_py.time(chat_id)
@@ -166,6 +173,8 @@ async def track_position():
                     attempts[chat_id] = 0  # healthy progress resets the backoff
                 seen[chat_id] = (pos, frozen)
                 if frozen >= STALL_SECONDS:
+                    log.info("watchdog: %s position frozen at %s for %ss (playback=%s) — treating as stall",
+                              chat_id, pos, frozen, getattr(call, "playback", None))
                     seen[chat_id] = (pos, 0)
                     await _auto_recover(chat_id, RESUME.get(chat_id, {"name": head[0], "link": head[2], "pos": 0}), attempts)
 
@@ -197,11 +206,7 @@ async def info_cmd(c: Client, m):
     if not q:
         return await m.reply_text("❌ nothing is currently playing.")
     name, link, typ = q[0][0], q[0][2], q[0][3]
-    try:
-        st = (await call_py.calls).get(chat_id)
-    except Exception:
-        st = None
-    status = "⏸ Paused" if (st and getattr(st, "playback", None) == Call.Status.PAUSED) else "▶️ Playing"
+    status = "⏸ Paused" if is_paused(chat_id) else "▶️ Playing"
     try:
         pos = int(await call_py.time(chat_id))
     except Exception:

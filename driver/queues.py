@@ -10,6 +10,11 @@ AUTOPLAY = {}  # chat_id -> True when auto-DJ should queue a related track at th
 LIVE = {}      # chat_id -> True when the now-playing item is a live broadcast
                # (radio/IPTV) — it never holds a real queue slot, so a new
                # /play-type command should replace it immediately.
+PAUSED = {}    # chat_id -> True while playback is deliberately paused (/pause).
+               # pytgcalls doesn't reliably report a paused stream's status to
+               # the stall-watchdog (observed as Status.IDLE, not PAUSED, in
+               # this version) so pause state has to be tracked explicitly by
+               # whoever calls call_py.pause()/resume(), not inferred from it.
 ACTIVE_THREAD = {}  # chat_id -> message_thread_id of the topic the current
                      # playback session was started from (absent/None = General).
                      # Messages sent by background tasks — stream-end, auto-DJ,
@@ -26,6 +31,17 @@ def set_active_thread(chat_id, thread_id):
 
 def get_active_thread(chat_id):
     return ACTIVE_THREAD.get(chat_id)
+
+
+def set_paused(chat_id, on):
+    if on:
+        PAUSED[chat_id] = True
+    else:
+        PAUSED.pop(chat_id, None)
+
+
+def is_paused(chat_id):
+    return PAUSED.get(chat_id, False)
 
 
 def set_live(chat_id, on):
@@ -164,6 +180,7 @@ def clear_queue(chat_id):
    LOOP.pop(chat_id, None)
    LIVE.pop(chat_id, None)
    ACTIVE_THREAD.pop(chat_id, None)
+   PAUSED.pop(chat_id, None)
    if chat_id in QUEUE:
       QUEUE.pop(chat_id)
       return 1

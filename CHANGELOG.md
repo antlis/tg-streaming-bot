@@ -4,6 +4,10 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.7] — 2026-08-21
+### Fixed
+- **The actual cause of 1.8.6's auto-unpause**, which turned out not to be fully fixed by that release. The `.playback` attribute fix was correct but not sufficient: pytgcalls reports a genuinely paused stream's `playback` as `Status.IDLE`, not `Status.PAUSED` (confirmed via live logging), so it's indistinguishable from a dropped stream — no attribute-based check can tell them apart. Pause state is now tracked explicitly (`driver.queues.PAUSED`, set by `/pause`/`/resume` and their panel buttons) instead of inferred from ntgcalls' own state. `/info`'s Paused/Playing status now reads the same explicit flag.
+
 ## [1.8.6] — 2026-08-21
 ### Fixed
 - **`/pause` auto-resumed itself (and appeared to rewind) after ~15 seconds.** The stall watchdog in `track_position()` is supposed to skip a deliberately paused stream by checking `call.status == Call.Status.PAUSED` — but pytgcalls' `Call` object has no `.status` attribute (it's `.playback`), so that check silently always missed. A paused stream's frozen position was treated as a silent stall, and after 15s the watchdog auto-recovered it by replaying from the last saved position — unpausing it and jumping back slightly. `/info`'s "⏸ Paused" / "▶️ Playing" status had the identical typo and always showed "Playing".

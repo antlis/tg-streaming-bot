@@ -5,7 +5,7 @@ from pyrogram import Client, filters
 from driver.decorators import authorized_users_only, errors, errors_cb
 from driver.filters import command, other_filters
 import random
-from driver.queues import QUEUE, clear_queue, get_queue, is_loop, set_loop, is_autoplay, set_autoplay
+from driver.queues import QUEUE, clear_queue, get_queue, is_loop, set_loop, is_autoplay, set_autoplay, set_paused
 import os
 
 from driver.utils import (
@@ -193,6 +193,7 @@ async def pause(client, m: Message):
     if chat_id in QUEUE:
         try:
             await call_py.pause(chat_id)
+            set_paused(chat_id, True)
             await m.reply(
                 "⏸ **Track paused.**\n\n• **To resume the stream, use the**\n» /resume command."
             )
@@ -212,6 +213,7 @@ async def resume(client, m: Message):
     if chat_id in QUEUE:
         try:
             await call_py.resume(chat_id)
+            set_paused(chat_id, False)
             await m.reply(
                 "▶️ **Track resumed.**\n\n• **To pause the stream, use the**\n» /pause command."
             )
@@ -270,6 +272,7 @@ async def cbpause(_, query: CallbackQuery):
     if chat_id in QUEUE:
         try:
             await call_py.pause(chat_id)
+            set_paused(chat_id, True)
             await query.answer("⏸ paused")
         except Exception as e:
             await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
@@ -289,6 +292,7 @@ async def cbresume(_, query: CallbackQuery):
     if chat_id in QUEUE:
         try:
             await call_py.resume(chat_id)
+            set_paused(chat_id, False)
             await query.answer("▶️ resumed")
         except Exception as e:
             await query.answer(f"🚫 error: {e}"[:190], show_alert=True)
