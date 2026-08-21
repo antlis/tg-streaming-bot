@@ -142,7 +142,11 @@ async def track_position():
                     continue
 
                 # don't penalise a deliberately paused stream
-                if getattr(call, "status", None) == Call.Status.PAUSED:
+                # (Call has no `.status` — playback state lives on `.playback`;
+                # the wrong attribute name here meant this check always silently
+                # missed, so a paused stream got treated as a stall and
+                # auto-resumed itself ~15s later, from a slightly stale position)
+                if getattr(call, "playback", None) == Call.Status.PAUSED:
                     seen[chat_id] = (None, 0)
                     continue
 
@@ -197,7 +201,7 @@ async def info_cmd(c: Client, m):
         st = (await call_py.calls).get(chat_id)
     except Exception:
         st = None
-    status = "⏸ Paused" if (st and getattr(st, "status", None) == Call.Status.PAUSED) else "▶️ Playing"
+    status = "⏸ Paused" if (st and getattr(st, "playback", None) == Call.Status.PAUSED) else "▶️ Playing"
     try:
         pos = int(await call_py.time(chat_id))
     except Exception:

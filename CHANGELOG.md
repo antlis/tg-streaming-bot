@@ -4,6 +4,10 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.6] — 2026-08-21
+### Fixed
+- **`/pause` auto-resumed itself (and appeared to rewind) after ~15 seconds.** The stall watchdog in `track_position()` is supposed to skip a deliberately paused stream by checking `call.status == Call.Status.PAUSED` — but pytgcalls' `Call` object has no `.status` attribute (it's `.playback`), so that check silently always missed. A paused stream's frozen position was treated as a silent stall, and after 15s the watchdog auto-recovered it by replaying from the last saved position — unpausing it and jumping back slightly. `/info`'s "⏸ Paused" / "▶️ Playing" status had the identical typo and always showed "Playing".
+
 ## [1.8.5] — 2026-08-21
 ### Fixed
 - **`/play <search terms>` and `/vplay <search terms>` could leave "🔍 Searching..." stuck forever** and reply with an unhelpful generic error instead. The thumbnail-card step (fetch the video's thumbnail, draw the title/chat name onto it) had no error handling in either handler, so any hiccup there — most commonly a failed/slow thumbnail fetch — propagated uncaught past the status message entirely. `thumb()` also silently continued past a failed fetch straight into `Image.open()`, which could open a stale thumbnail left over from a previous, unrelated search under the same user id rather than failing clearly. Both are now handled: `thumb()` raises immediately on a bad fetch (with a 15s timeout so it can't hang indefinitely), and both handlers catch it and edit the status message instead of leaving it stuck.
