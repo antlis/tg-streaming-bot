@@ -303,8 +303,11 @@ async def play(c: Client, m: Message):
                     thumbnail = search[3]
                     userid = m.from_user.id
                     gcname = m.chat.title
-                    ctitle = await CHAT_TITLE(gcname)
-                    image = await thumb(thumbnail, title, userid, ctitle)
+                    try:
+                        ctitle = await CHAT_TITLE(gcname)
+                        image = await thumb(thumbnail, title, userid, ctitle)
+                    except Exception as e:
+                        return await suhu.edit(f"🚫 couldn't build the thumbnail: `{e}`")
                     format = "bestaudio[ext=m4a]"
                     ok, ytlink = await ytdl(format, url, suhu)
                     if ok == 0:
@@ -358,8 +361,11 @@ async def play(c: Client, m: Message):
                 thumbnail = search[3]
                 userid = m.from_user.id
                 gcname = m.chat.title
-                ctitle = await CHAT_TITLE(gcname)
-                image = await thumb(thumbnail, title, userid, ctitle)
+                try:
+                    ctitle = await CHAT_TITLE(gcname)
+                    image = await thumb(thumbnail, title, userid, ctitle)
+                except Exception as e:
+                    return await suhu.edit(f"🚫 couldn't build the thumbnail: `{e}`")
                 format = "bestaudio[ext=m4a]"
                 ok, ytlink = await ytdl(format, url, suhu)
                 if ok == 0:

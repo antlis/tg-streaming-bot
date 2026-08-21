@@ -15,11 +15,15 @@ def changeImageSize(maxWidth, maxHeight, image):
 
 async def thumb(thumbnail, title, userid, ctitle):
     async with aiohttp.ClientSession() as session:
-        async with session.get(thumbnail) as resp:
-            if resp.status == 200:
-                f = await aiofiles.open(f"search/thumb{userid}.png", mode="wb")
-                await f.write(await resp.read())
-                await f.close()
+        async with session.get(thumbnail, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status != 200:
+                # Otherwise we'd silently fall through to Image.open() below on
+                # a file that's either missing (first search for this userid)
+                # or a stale leftover from a previous, unrelated search.
+                raise RuntimeError(f"thumbnail fetch failed: HTTP {resp.status}")
+            f = await aiofiles.open(f"search/thumb{userid}.png", mode="wb")
+            await f.write(await resp.read())
+            await f.close()
     image1 = Image.open(f"search/thumb{userid}.png")
     image2 = Image.open("driver/source/LightBlue.png")
     image3 = changeImageSize(1280, 720, image1)

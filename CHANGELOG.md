@@ -4,6 +4,10 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.5] — 2026-08-21
+### Fixed
+- **`/play <search terms>` and `/vplay <search terms>` could leave "🔍 Searching..." stuck forever** and reply with an unhelpful generic error instead. The thumbnail-card step (fetch the video's thumbnail, draw the title/chat name onto it) had no error handling in either handler, so any hiccup there — most commonly a failed/slow thumbnail fetch — propagated uncaught past the status message entirely. `thumb()` also silently continued past a failed fetch straight into `Image.open()`, which could open a stale thumbnail left over from a previous, unrelated search under the same user id rather than failing clearly. Both are now handled: `thumb()` raises immediately on a bad fetch (with a 15s timeout so it can't hang indefinitely), and both handlers catch it and edit the status message instead of leaving it stuck.
+
 ## [1.8.4] — 2026-08-16
 ### Fixed
 - **The actual cause of 1.8.3's `TypeError: NoneType has no len()`**, which turned out not to be fixed by that release for chats with topic lock active. Root cause: `other_filters` (part of every command handler's filter chain) checked for `/topic` using pyrogram's `filters.command()`, which mutates `message.command` as a side effect of every check it runs — including non-matches. Since `other_filters` is ANDed in *after* the handler's own `command([...])` filter already matched and set `message.command` correctly, that check clobbered it back to `None` before the handler ever ran, 100% reproducibly, in any topic-locked chat. Replaced with a plain non-mutating text match. The 1.8.3 snapshot-before-await changes stay in place as defense in depth but weren't the real fix.

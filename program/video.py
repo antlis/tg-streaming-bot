@@ -320,8 +320,11 @@ async def vplay(c: Client, m: Message):
                     thumbnail = search[3]
                     userid = m.from_user.id
                     gcname = m.chat.title
-                    ctitle = await CHAT_TITLE(gcname)
-                    image = await thumb(thumbnail, title, userid, ctitle)
+                    try:
+                        ctitle = await CHAT_TITLE(gcname)
+                        image = await thumb(thumbnail, title, userid, ctitle)
+                    except Exception as e:
+                        return await loser.edit(f"🚫 couldn't build the thumbnail: `{e}`")
                     ok, ytlink = await ytdl(url, loser)
                     if ok == 0:
                         await loser.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")
@@ -380,8 +383,11 @@ async def vplay(c: Client, m: Message):
                 thumbnail = search[3]
                 userid = m.from_user.id
                 gcname = m.chat.title
-                ctitle = await CHAT_TITLE(gcname)
-                image = await thumb(thumbnail, title, userid, ctitle)
+                try:
+                    ctitle = await CHAT_TITLE(gcname)
+                    image = await thumb(thumbnail, title, userid, ctitle)
+                except Exception as e:
+                    return await loser.edit(f"🚫 couldn't build the thumbnail: `{e}`")
                 ok, ytlink = await ytdl(url, loser)
                 if ok == 0:
                     await loser.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")
