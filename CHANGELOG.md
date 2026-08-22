@@ -4,6 +4,12 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] — 2026-08-22
+### Added
+- **"▶️ Play all" in `/library`.** Any folder listing with video files directly inside it now shows a "▶️ Play all (N)" button that queues every file in that folder, in sorted order, as one playlist — plays the first immediately if idle, or appends the whole batch if something's already playing.
+- **`/lplay <name>` now matches folders, not just filenames.** It first looks for a folder (anywhere under an allowed library category, including a category root itself) whose name contains the query and, if found, queues that whole folder the same way "Play all" does. Falls back to the existing single-file substring search when no folder matches.
+- **Category icons in `/library`**, matching each category's content (🎨 cartoons, 🎬 movie, 📺 shows, 🎓 tutorials, 🎵 music), falling back to a generic 📁 for anything else.
+
 ## [1.8.8] — 2026-08-21
 ### Fixed
 - **Proactive bot messages (auto-resume, stream-end, autoplay-next, idle-leave) could leak into "General" in a topic-locked group instead of the locked topic.** These all send via `get_active_thread(chat_id)`, which was tracked purely per-play from the triggering command's `message_thread_id` — a separate, non-persisted mechanism from `/topic lock`. If that capture ever came back empty (e.g. a `/vplay` processed during a connection reconnect, where pyrogram's catch-up update can be missing topic metadata), every background message for that session fell back to no thread at all. `get_active_thread()` now prefers `TOPIC_LOCK` when the chat has one set — by definition of the lock, any command that could have started the session had to come from that topic anyway — and only falls back to the per-play capture for unlocked chats.

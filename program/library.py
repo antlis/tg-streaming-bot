@@ -26,6 +26,18 @@ from pyrogram.types import (
 VIDEO_EXT = (".mp4", ".mkv", ".avi", ".webm", ".mov", ".m4v", ".ts", ".flv", ".wmv", ".mpg", ".mpeg")
 PAGE = 10
 
+# Cosmetic only — falls back to a generic folder icon for anything not listed.
+CATEGORY_EMOJI = {
+    "cartoons": "🎨",
+    "movie": "🎬",
+    "movies": "🎬",
+    "shows": "📺",
+    "series": "📺",
+    "tutorials": "🎓",
+    "tutorial": "🎓",
+    "music": "🎵",
+}
+
 # token -> absolute path. Tokens keep callback_data tiny (paths are too long /
 # can exceed Telegram's 64-byte limit). Populated lazily as folders are listed.
 _TOKENS = {}
@@ -101,7 +113,9 @@ def _entries(dirpath):
 
 
 def _categories_kb():
-    rows = [[InlineKeyboardButton(f"📁 {name}", callback_data=f"lx:{_tok(path)}:0")]
+    rows = [[InlineKeyboardButton(
+                f"{CATEGORY_EMOJI.get(name.lower(), '📁')} {name}",
+                callback_data=f"lx:{_tok(path)}:0")]
             for name, path in _top_categories()]
     rows.append([InlineKeyboardButton("🗑 Close", callback_data="cls")])
     return InlineKeyboardMarkup(rows)
@@ -127,6 +141,8 @@ def _listing_kb(dirpath, page):
         nav.append(InlineKeyboardButton("▶", callback_data=f"lx:{_tok(dirpath)}:{page + 1}"))
     if nav:
         rows.append(nav)
+    if files:
+        rows.append([InlineKeyboardButton(f"▶️ Play all ({len(files)})", callback_data=f"lall:{_tok(dirpath)}")])
     parent = os.path.dirname(dirpath)
     bottom = []
     if dirpath != os.path.abspath(LIBRARY_ROOT) and _within_library(parent) and parent != os.path.abspath(LIBRARY_ROOT):
@@ -168,6 +184,30 @@ async def lib_browse_cb(_, query: CallbackQuery):
         return await query.answer("list changed — reopen /library", show_alert=True)
     name = os.path.basename(path)
     await query.edit_message_text(f"📁 **{name}** — pick a folder or file:", reply_markup=_listing_kb(path, page))
+
+
+@Client.on_callback_query(filters.regex(r"^lall:"))
+@errors_cb
+async def lib_play_all_cb(c: Client, query: CallbackQuery):
+    path = _TOKENS.get(query.data.split(":")[1])
+    if not path or not os.path.isdir(path):
+        return await query.answer("list changed — reopen /library", show_alert=True)
+    chat_id = query.message.chat.id
+    member = await c.get_chat_member(chat_id, query.from_user.id)
+    if not can_manage_vc(member):
+        return await query.answer("💡 admins (manage video chats) only", show_alert=True)
+    _, files = _entries(path)
+    if not files:
+        return await query.answer("no video files in this folder", show_alert=True)
+    ok, reason = await ensure_assistant_in_chat(c, chat_id)
+    if not ok:
+        return await query.answer(f"❌ {reason}"[:190], show_alert=True)
+    await drop_stale_queue(chat_id)
+    drop_if_live(chat_id)  # radio/IPTV never hold a real queue slot
+    set_active_thread(chat_id, getattr(query.message, "message_thread_id", None))
+    await query.answer(f"queuing {len(files)}…")
+    status = await query.message.reply(f"💡 **Queuing {len(files)} tracks** from `{os.path.basename(path)}`…")
+    await _queue_folder(chat_id, files, status)
 
 
 @Client.on_callback_query(filters.regex(r"^lp:"))
@@ -216,6 +256,54 @@ async def _start_library_video(c, msg, chat_id, name, streamable_src, status=Non
         await status.edit(f"🎬 **Now playing:** `{name[:60]}`", reply_markup=control_panel)
     except Exception as e:
         await status.edit(f"🚫 error: `{e}`")
+
+
+async def _queue_folder(chat_id, files, status):
+    """Queue every (name, path) in `files` (already sorted) as one playlist:
+    play the first immediately if idle, or append the whole batch if something
+    is already playing. Stops early if the queue fills up. `status` is edited
+    with the outcome."""
+    first_name, first_path = files[0]
+    rest = files[1:]
+    added, full = 0, False
+    try:
+        if chat_id in QUEUE:
+            for name, path in files:
+                if add_to_queue(chat_id, name[:70], path, path, "Video", 720) == -1:
+                    full = True
+                    break
+                added += 1
+            text = f"💡 **Queued {added} track{'s' if added != 1 else ''}**"
+        else:
+            streamable = await prepare_for_stream(first_path, status)
+            await call_py.play(chat_id, media_video(streamable, 720))
+            add_to_queue(chat_id, first_name[:70], streamable, streamable, "Video", 720)
+            added = 1
+            for name, path in rest:
+                if add_to_queue(chat_id, name[:70], path, path, "Video", 720) == -1:
+                    full = True
+                    break
+                added += 1
+            text = f"🎬 **Now playing:** `{first_name[:60]}`"
+            if added > 1:
+                text += f"\n💡 queued {added - 1} more"
+        if full:
+            text += f" (queue full — rest skipped, max {MAX_QUEUE_SIZE})"
+        await status.edit(text, reply_markup=control_panel)
+    except Exception as e:
+        await status.edit(f"🚫 error: `{e}`")
+
+
+def _find_folder(needle):
+    """First folder anywhere under an allowed category whose name contains
+    `needle` (case-insensitive) — including a category root itself, e.g.
+    'tutorials' matches the whole tutorials category."""
+    for _, catpath in _top_categories():
+        for root, dirs, _files in os.walk(catpath):
+            dirs.sort(key=str.lower)
+            if needle in os.path.basename(root).lower():
+                return root
+    return None
 
 
 @Client.on_callback_query(filters.regex(r"^la:"))
@@ -291,8 +379,24 @@ async def lplay(c: Client, m: Message):
     if _disabled():
         return await m.reply("📚 the local library isn't configured.")
     if len(m.command) < 2:
-        return await m.reply("» usage: `/lplay <part of a filename>`  (or browse with /library)")
+        return await m.reply("» usage: `/lplay <part of a filename or folder name>`  (or browse with /library)")
     needle = m.text.split(None, 1)[1].strip().lower()
+
+    # A folder-name match queues the whole folder as a playlist (e.g. a show,
+    # a course, a category like "tutorials"); tried before the single-file
+    # search below since a folder hit is usually the more useful match.
+    folder = _find_folder(needle)
+    if folder:
+        _, files = _entries(folder)
+        if files:
+            if not await ensure_can_play(c, m):
+                return
+            chat_id = m.chat.id
+            drop_if_live(chat_id)  # radio/IPTV never hold a real queue slot
+            set_active_thread(chat_id, m.message_thread_id)
+            status = await m.reply(f"💡 **Queuing {len(files)} tracks** from `{os.path.basename(folder)}`…")
+            return await _queue_folder(chat_id, files, status)
+
     found = None
     for _, catpath in _top_categories():       # only within allowed categories
         for root, _dirs, fnames in os.walk(catpath):
