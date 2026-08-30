@@ -6,7 +6,7 @@ from time import time
 
 import logging
 
-from config import ASSISTANT_NAME, BOT_USERNAME, IMG_1, IMG_2, MAX_QUEUE_SIZE, SPONSORBLOCK_REMOVE
+from config import ASSISTANT_NAME, BOT_USERNAME, COOKIES_FILE, IMG_1, IMG_2, MAX_QUEUE_SIZE, PROXY_URL, SPONSORBLOCK_REMOVE
 from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
 from driver.decorators import errors
@@ -24,6 +24,22 @@ from youtubesearchpython import VideosSearch
 
 log = logging.getLogger(__name__)
 
+_DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+)
+
+
+def _ytdl_site_flags():
+    """Build extra yt-dlp flags for non-YouTube sites (cookies, user-agent, proxy)."""
+    flags = ["--socket-timeout", "60"]
+    if COOKIES_FILE:
+        flags += ["--cookies", COOKIES_FILE]
+    flags += ["--user-agent", _DEFAULT_USER_AGENT]
+    if PROXY_URL:
+        flags += ["--proxy", PROXY_URL]
+    return flags
+
 
 def ytsearch(query: str):
     try:
@@ -31,9 +47,13 @@ def ytsearch(query: str):
         is_yt = bool(re.match(r"https?://(www\.|m\.)?(youtube\.com|youtu\.be)/", q))
         if re.match(r"https?://", q):
             # any direct URL — use yt-dlp for metadata (handles YouTube, Rutube, Vimeo, …)
+            cmd = ["yt-dlp", "--no-warnings", "--skip-download",
+                   "--print", "%(title)s\x1f%(duration_string)s\x1f%(id)s\x1f%(thumbnail)s"]
+            if not is_yt:
+                cmd += _ytdl_site_flags()
+            cmd.append(q)
             out = subprocess.run(
-                ["yt-dlp", "--no-warnings", "--skip-download",
-                 "--print", "%(title)s\x1f%(duration_string)s\x1f%(id)s\x1f%(thumbnail)s", q],
+                cmd,
                 capture_output=True, text=True, timeout=90,
             ).stdout.strip().split("\x1f")
             title = out[0] if out and out[0] else q
@@ -64,6 +84,7 @@ async def ytdl(link, status_msg=None):
     if not _YT_RE.match(link):
         proc = await asyncio.create_subprocess_exec(
             "yt-dlp", "--no-warnings", "--no-playlist",
+            *_ytdl_site_flags(),
             "-f", "best[height<=720]/best",
             "--print", "%(url)s",
             link,
@@ -88,7 +109,7 @@ async def ytdl(link, status_msg=None):
         "download:PROG|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
         # android_vr client avoids YouTube's SABR-gating (the default clients
         # only offer the progressive itag-18 stream, which 403s).
-        *(["--extractor-args", "youtube:player_client=android_vr"]
+        *(["--extractor-args", "youtube:player_client=android"]
           if _YT_RE.match(link) else []),
         "--print",
         "after_move:filepath",
@@ -324,7 +345,8 @@ async def vplay(c: Client, m: Message):
                         ctitle = await CHAT_TITLE(gcname)
                         image = await thumb(thumbnail, title, userid, ctitle)
                     except Exception as e:
-                        return await loser.edit(f"🚫 couldn't build the thumbnail: `{e}`")
+                        log.warning("thumb() failed: %s %s", type(e).__name__, e, exc_info=True)
+                        return await loser.edit(f"🚫 couldn't build the thumbnail: `{type(e).__name__}: {e}`")
                     ok, ytlink = await ytdl(url, loser)
                     if ok == 0:
                         await loser.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")
@@ -387,7 +409,8 @@ async def vplay(c: Client, m: Message):
                     ctitle = await CHAT_TITLE(gcname)
                     image = await thumb(thumbnail, title, userid, ctitle)
                 except Exception as e:
-                    return await loser.edit(f"🚫 couldn't build the thumbnail: `{e}`")
+                    log.warning("thumb() failed: %s %s", type(e).__name__, e, exc_info=True)
+                    return await loser.edit(f"🚫 couldn't build the thumbnail: `{type(e).__name__}: {e}`")
                 ok, ytlink = await ytdl(url, loser)
                 if ok == 0:
                     await loser.edit(f"❌ yt-dl issues detected\n\n» `{ytlink}`")

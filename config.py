@@ -77,3 +77,11 @@ MAX_QUEUE_SIZE = int(getenv("MAX_QUEUE_SIZE", "50"))
 # yt-dlp SponsorBlock — comma-separated categories to cut from YouTube downloads,
 # e.g. "sponsor,selfpromo,interaction,intro,outro,music_offtopic". Empty = off.
 SPONSORBLOCK_REMOVE = getenv("SPONSORBLOCK_REMOVE", "").strip()
+
+# yt-dlp cookies — path to a Netscape-format cookies.txt for sites that require
+# authentication (age-gated, members-only, etc.). Empty = no cookies.
+COOKIES_FILE = getenv("COOKIES_FILE", "").strip()
+
+# yt-dlp proxy — proxy URL for non-YouTube downloads (e.g. socks5://user:pass@host:1080).
+# Empty = direct connection.
+PROXY_URL = getenv("PROXY_URL", "").strip()
