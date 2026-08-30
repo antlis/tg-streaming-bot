@@ -26,6 +26,7 @@ BOT_COMMANDS = [
     BotCommand("search", "search YouTube and pick a result to play"),
     BotCommand("library", "browse the local media library"),
     BotCommand("lplay", "play a local library file by name"),
+    BotCommand("cartoons", "browse & play web-sourced cartoon episodes"),
     BotCommand("radio", "tune in to an internet radio station"),
     BotCommand("iptv", "search and stream live TV channels (iptv-org catalogue)"),
     BotCommand("topic", "restrict the bot to one forum topic: lock|unlock|status"),

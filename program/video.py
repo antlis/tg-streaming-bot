@@ -78,25 +78,64 @@ _YT_RE = re.compile(r"https?://(www\.|m\.)?(youtube\.com|youtu\.be)/")
 
 
 async def ytdl(link, status_msg=None):
-    # For non-YouTube sites (e.g. Rutube) the formats are HLS-only muxed streams.
-    # Extract the best ≤720p stream URL and hand it to ffmpeg live instead of
-    # downloading the whole file. YouTube must be downloaded first (direct URLs 403).
+    # Non-YouTube sites may have split HLS video+audio tracks (e.g. southparkstudios.com)
+    # or muxed streams (e.g. Rutube).  Always let yt-dlp download+merge so we get a
+    # single playable mp4 with both audio and video.  YouTube URLs 403 ffmpeg directly,
+    # so it must be downloaded first regardless.
     if not _YT_RE.match(link):
         proc = await asyncio.create_subprocess_exec(
             "yt-dlp", "--no-warnings", "--no-playlist",
             *_ytdl_site_flags(),
-            "-f", "best[height<=720]/best",
-            "--print", "%(url)s",
+            "--no-simulate", "--newline",
+            "--progress-template",
+            "download:PROG|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
+            "--print", "after_move:filepath",
+            "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+            "--merge-output-format", "mp4",
+            "-o", "downloads/%(id)s.%(ext)s",
             link,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode == 0:
-            url = stdout.decode(errors="ignore").strip()
-            if url:
-                return 1, url
-        err = stderr.decode(errors="ignore")[-400:]
-        return 0, (err or "stream URL extraction failed")
+        stderr_buf = []
+
+        async def _drain_stderr():
+            while True:
+                chunk = await proc.stderr.readline()
+                if not chunk:
+                    break
+                stderr_buf.append(chunk.decode(errors="ignore"))
+
+        stderr_task = asyncio.ensure_future(_drain_stderr())
+
+        path = ""
+        last_edit = 0.0
+        while True:
+            raw = await proc.stdout.readline()
+            if not raw:
+                break
+            line = raw.decode(errors="ignore").strip()
+            if not line:
+                continue
+            if line.startswith("PROG|"):
+                if status_msg is not None and time() - last_edit >= 3:
+                    last_edit = time()
+                    parts = line.split("|")
+                    pct = parts[1].strip() if len(parts) > 1 else ""
+                    spd = parts[2].strip() if len(parts) > 2 else ""
+                    eta = parts[3].strip() if len(parts) > 3 else ""
+                    try:
+                        await status_msg.edit(
+                            f"📥 **Downloading…** `{pct}`\n({spd}, ETA {eta})"
+                        )
+                    except Exception:
+                        pass
+            else:
+                path = line
+        await proc.wait()
+        await stderr_task
+        if proc.returncode == 0 and path:
+            return 1, path
+        return 0, ("".join(stderr_buf)[-500:] or "download failed")
 
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
