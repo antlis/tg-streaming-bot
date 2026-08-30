@@ -1,5 +1,7 @@
 import os
+import re
 import hashlib
+import asyncio
 
 from config import BOT_USERNAME, LIBRARY_ROOT, LIBRARY_CATEGORIES, MAX_QUEUE_SIZE
 from driver.decorators import errors, errors_cb
@@ -117,6 +119,8 @@ def _categories_kb():
                 f"{CATEGORY_EMOJI.get(name.lower(), '📁')} {name}",
                 callback_data=f"lx:{_tok(path)}:0")]
             for name, path in _top_categories()]
+    # Web-sourced cartoon library
+    rows.append([InlineKeyboardButton("🌐 Cartoons", callback_data="cx:shows")])
     rows.append([InlineKeyboardButton("🗑 Close", callback_data="cls")])
     return InlineKeyboardMarkup(rows)
 
@@ -155,11 +159,15 @@ def _listing_kb(dirpath, page):
 @Client.on_message(command(["library", f"library@{BOT_USERNAME}", "lib"]) & other_filters)
 @errors
 async def library(c: Client, m: Message):
-    if _disabled():
+    if _disabled() and not _top_categories():
+        # No local library — still show cartoons if available
+        if CARTOON_SHOWS:
+            return await m.reply(
+                "📚 **Library** — pick a category:",
+                reply_markup=_categories_kb(),
+            )
         return await m.reply("📚 the local library isn't configured (set `LIBRARY_ROOT`).")
-    if not _top_categories():
-        return await m.reply("📭 the library has no categories (check the mount / `LIBRARY_CATEGORIES`).")
-    await m.reply("📚 **Local library** — pick a category:", reply_markup=_categories_kb())
+    await m.reply("📚 **Library** — pick a category:", reply_markup=_categories_kb())
 
 
 @Client.on_callback_query(filters.regex(r"^libcats$"))
@@ -427,3 +435,168 @@ async def lplay(c: Client, m: Message):
         await status.edit(f"🎬 **Now playing:** `{name[:60]}`", reply_markup=control_panel)
     except Exception as e:
         await status.edit(f"🚫 error: `{e}`")
+
+
+# ---------------------------------------------------------------------------
+# Cartoon library (web-sourced) — integrated into /library
+# ---------------------------------------------------------------------------
+
+from program.cartoons import (
+    _scrape_seasons as _c_seasons,
+    _scrape_episodes as _c_episodes,
+    _show_name as _c_show_name,
+)
+
+CARTOON_SHOWS = {"south-park": "South Park"}
+
+
+def _cartoon_shows_kb():
+    rows = []
+    for sid, name in CARTOON_SHOWS.items():
+        rows.append([InlineKeyboardButton(f"🌐 {name}", callback_data=f"cx:seasons:{sid}")])
+    rows.append([InlineKeyboardButton("⬅ Back to Library", callback_data="libcats")])
+    rows.append([InlineKeyboardButton("🗑 Close", callback_data="cls")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _cartoon_seasons_kb(show_id, seasons):
+    rows = []
+    for s in seasons:
+        rows.append([InlineKeyboardButton(
+            f"🌐 {s['name']}",
+            callback_data=f"cx:eps:{show_id}:{s['season']}",
+        )])
+    rows.append([InlineKeyboardButton("⬅ Shows", callback_data="cx:shows")])
+    rows.append([InlineKeyboardButton("🗑 Close", callback_data="cls")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _cartoon_episodes_kb(show_id, season_num, episodes, page=0):
+    _PAGE = 8
+    pages = max(1, (len(episodes) + _PAGE - 1) // _PAGE)
+    page = max(0, min(page, pages - 1))
+    rows = []
+    for ep in episodes[page * _PAGE:(page + 1) * _PAGE]:
+        s, e = ep["season"], ep["episode"]
+        title = ep["title"][:45]
+        dur = ep["duration"]
+        label = f"🌐 S{s:02d}E{e:02d}: {title}"
+        if dur:
+            label += f" ({dur})"
+        rows.append([InlineKeyboardButton(label, callback_data=f"cx:play:{show_id}:{s}:{e}")])
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("◀", callback_data=f"cx:eps:{show_id}:{season_num}:{page - 1}"))
+    if pages > 1:
+        nav.append(InlineKeyboardButton(f"{page + 1}/{pages}", callback_data="cx noop"))
+    if page < pages - 1:
+        nav.append(InlineKeyboardButton("▶", callback_data=f"cx:eps:{show_id}:{season_num}:{page + 1}"))
+    if nav:
+        rows.append(nav)
+    rows.append([InlineKeyboardButton("⬅ Seasons", callback_data=f"cx:seasons:{show_id}")])
+    rows.append([InlineKeyboardButton("🗑 Close", callback_data="cls")])
+    return InlineKeyboardMarkup(rows)
+
+
+@Client.on_callback_query(filters.regex(r"^cx noop$"))
+@errors_cb
+async def cx_noop(_, query: CallbackQuery):
+    await query.answer()
+
+
+@Client.on_callback_query(filters.regex(r"^cx:shows$"))
+@errors_cb
+async def cx_shows_cb(_, query: CallbackQuery):
+    await query.edit_message_text(
+        "📺 **Cartoon Library** — web-sourced content (🌐)\n\nPick a show:",
+        reply_markup=_cartoon_shows_kb(),
+    )
+
+
+@Client.on_callback_query(filters.regex(r"^cx:seasons:(.+)$"))
+@errors_cb
+async def cx_seasons_cb(c: Client, query: CallbackQuery):
+    show_id = query.matches[0].group(1)
+    await query.answer("loading seasons…")
+    seasons = await asyncio.to_thread(_c_seasons, show_id)
+    if not seasons:
+        return await query.edit_message_text("❌ failed to load seasons.")
+    await query.edit_message_text(
+        f"🌐 **{_c_show_name(show_id)}** — pick a season:",
+        reply_markup=_cartoon_seasons_kb(show_id, seasons),
+    )
+
+
+@Client.on_callback_query(filters.regex(r"^cx:eps:([^:]+):(\d+)(?::(\d+))?$"))
+@errors_cb
+async def cx_episodes_cb(c: Client, query: CallbackQuery):
+    show_id = query.matches[0].group(1)
+    season_num = int(query.matches[0].group(2))
+    page = int(query.matches[0].group(3)) if query.matches[0].group(3) else 0
+    await query.answer("loading episodes…")
+    episodes = await asyncio.to_thread(_c_episodes, show_id, season_num)
+    if not episodes:
+        return await query.edit_message_text("❌ no episodes found for this season.")
+    await query.edit_message_text(
+        f"🌐 **Episodes** — Season {season_num} — pick an episode:",
+        reply_markup=_cartoon_episodes_kb(show_id, season_num, episodes, page),
+    )
+
+
+@Client.on_callback_query(filters.regex(r"^cx:play:([^:]+):(\d+):(\d+)$"))
+@errors_cb
+async def cx_play_cb(c: Client, query: CallbackQuery):
+    show_id = query.matches[0].group(1)
+    season_num = int(query.matches[0].group(2))
+    episode_num = int(query.matches[0].group(3))
+
+    chat_id = query.message.chat.id
+    member = await c.get_chat_member(chat_id, query.from_user.id)
+    if not can_manage_vc(member):
+        return await query.answer("💡 admins (manage video chats) only", show_alert=True)
+
+    ok, reason = await ensure_assistant_in_chat(c, chat_id)
+    if not ok:
+        return await query.answer(f"❌ {reason}"[:190], show_alert=True)
+
+    await drop_stale_queue(chat_id)
+    drop_if_live(chat_id)
+    set_active_thread(chat_id, getattr(query.message, "message_thread_id", None))
+
+    await query.answer("downloading…")
+    await query.edit_message_text(f"📥 **Downloading S{season_num:02d}E{episode_num:02d}…**")
+
+    from program.video import ytdl
+    episodes = await asyncio.to_thread(_c_episodes, show_id, season_num)
+    ep = None
+    for e in episodes:
+        if e["season"] == season_num and e["episode"] == episode_num:
+            ep = e
+            break
+    if not ep:
+        return await query.edit_message_text("❌ episode not found")
+
+    title = ep["title"]
+    url = f"https://www.southparkstudios.com{ep['url']}"
+    ok, ytlink = await ytdl(url, query.message)
+    if ok == 0:
+        return await query.edit_message_text(f"❌ download failed\n\n`{ytlink}`")
+
+    songname = f"S{season_num:02d}E{episode_num:02d}: {title}"
+    if chat_id in QUEUE:
+        pos = add_to_queue(chat_id, songname, ytlink, url, "Video", 720)
+        if pos == -1:
+            return await query.edit_message_text(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
+        return await query.edit_message_text(
+            f"💡 **Queued #{pos}:** `{songname[:60]}`",
+            reply_markup=control_panel,
+        )
+    try:
+        await call_py.play(chat_id, media_video(ytlink, 720))
+        add_to_queue(chat_id, songname, ytlink, url, "Video", 720)
+        await query.edit_message_text(
+            f"🎬 **Now playing:** `{songname[:60]}`",
+            reply_markup=control_panel,
+        )
+    except Exception as e:
+        await query.edit_message_text(f"🚫 error: `{e}`")

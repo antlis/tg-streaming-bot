@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import asyncio
 import subprocess
 from time import time
@@ -78,64 +79,40 @@ _YT_RE = re.compile(r"https?://(www\.|m\.)?(youtube\.com|youtu\.be)/")
 
 
 async def ytdl(link, status_msg=None):
-    # Non-YouTube sites may have split HLS video+audio tracks (e.g. southparkstudios.com)
-    # or muxed streams (e.g. Rutube).  Always let yt-dlp download+merge so we get a
-    # single playable mp4 with both audio and video.  YouTube URLs 403 ffmpeg directly,
-    # so it must be downloaded first regardless.
+    # Non-YouTube sites: extract the master m3u8 manifest URL and stream it
+    # directly via ffmpeg (no download needed).  The master manifest contains
+    # both video and audio variant playlists — ffmpeg selects the best match.
+    # YouTube URLs 403 ffmpeg directly, so they must be downloaded first.
     if not _YT_RE.match(link):
         proc = await asyncio.create_subprocess_exec(
             "yt-dlp", "--no-warnings", "--no-playlist",
             *_ytdl_site_flags(),
-            "--no-simulate", "--newline",
-            "--progress-template",
-            "download:PROG|%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
-            "--print", "after_move:filepath",
+            "--dump-json",
             "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
-            "--merge-output-format", "mp4",
-            "-o", "downloads/%(id)s.%(ext)s",
             link,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
-        stderr_buf = []
-
-        async def _drain_stderr():
-            while True:
-                chunk = await proc.stderr.readline()
-                if not chunk:
-                    break
-                stderr_buf.append(chunk.decode(errors="ignore"))
-
-        stderr_task = asyncio.ensure_future(_drain_stderr())
-
-        path = ""
-        last_edit = 0.0
-        while True:
-            raw = await proc.stdout.readline()
-            if not raw:
-                break
-            line = raw.decode(errors="ignore").strip()
-            if not line:
-                continue
-            if line.startswith("PROG|"):
-                if status_msg is not None and time() - last_edit >= 3:
-                    last_edit = time()
-                    parts = line.split("|")
-                    pct = parts[1].strip() if len(parts) > 1 else ""
-                    spd = parts[2].strip() if len(parts) > 2 else ""
-                    eta = parts[3].strip() if len(parts) > 3 else ""
-                    try:
-                        await status_msg.edit(
-                            f"📥 **Downloading…** `{pct}`\n({spd}, ETA {eta})"
-                        )
-                    except Exception:
-                        pass
-            else:
-                path = line
-        await proc.wait()
-        await stderr_task
-        if proc.returncode == 0 and path:
-            return 1, path
-        return 0, ("".join(stderr_buf)[-500:] or "download failed")
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            err = stderr.decode(errors="ignore")[-400:]
+            return 0, (err or "metadata extraction failed")
+        try:
+            info = json.loads(stdout.decode(errors="ignore"))
+        except Exception:
+            return 0, "invalid yt-dlp JSON"
+        # preferred_formats[0].manifest_url is the master m3u8 URL
+        mf = info.get("requested_formats") or []
+        manifest = None
+        for f in mf:
+            manifest = f.get("manifest_url") or manifest
+        if not manifest:
+            # fallback: individual format url (muxed stream, e.g. Rutube)
+            for f in mf:
+                u = f.get("url")
+                if u:
+                    return 1, u
+            return 0, "no stream URL found"
+        return 1, manifest
 
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
