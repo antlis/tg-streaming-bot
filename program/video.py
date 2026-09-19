@@ -111,6 +111,11 @@ async def ytdl(link, status_msg=None):
                 u = f.get("url")
                 if u:
                     return 1, u
+            # sites with no requested_formats at all (single already-muxed
+            # stream, e.g. Rutube) put the playable URL at the top level
+            u = info.get("url")
+            if u:
+                return 1, u
             return 0, "no stream URL found"
         return 1, manifest
 
@@ -127,8 +132,6 @@ async def ytdl(link, status_msg=None):
         # only offer the progressive itag-18 stream, which 403s).
         *(["--extractor-args", "youtube:player_client=android"]
           if _YT_RE.match(link) else []),
-        "--print",
-        "after_move:filepath",
         # Prefer H.264 video + AAC(m4a) audio so the merge produces a universally
         # playable, light-to-stream mp4 (avoids AV1/VP9/Opus -> mp4 issues).
         "-f",
@@ -175,8 +178,12 @@ async def ytdl(link, status_msg=None):
                     )
                 except Exception:
                     pass
-        else:
-            path = line  # --print after_move:filepath is the last line on success
+        elif "[download]" in line and "Destination:" in line:
+            path = line.split("Destination:", 1)[1].strip()
+        elif "[download]" in line and "has already been downloaded" in line:
+            path = line.split("[download]", 1)[1].split("has already")[0].strip()
+        elif "[Merger] Merging formats into" in line:
+            path = line.split("into", 1)[1].strip().strip('"')
     await proc.wait()
     await stderr_task
     if proc.returncode == 0 and path:
@@ -568,13 +575,19 @@ async def vstream(c: Client, m: Message):
         else:
             return await m.reply("**/vstream {link} {720/480/360}**")
 
-        regex = r"^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+"
-        match = re.match(regex, link)
-        if match:
+        if _YT_RE.match(link):
             ok, livelink = await ytdl(link, loser)
         else:
-            livelink = link
-            ok = 1
+            # Not YouTube — could be a page URL from a site yt-dlp supports
+            # (Rutube, Vimeo, ...) or an already-direct stream link (m3u8/IPTV).
+            # Try extraction first; if the extractor doesn't recognize the URL,
+            # fall back to using it as-is.
+            ok, extracted = await ytdl(link, loser)
+            if ok:
+                livelink = extracted
+            else:
+                livelink = link
+                ok = 1
 
         if ok == 0:
             await loser.edit(f"❌ yt-dl issues detected\n\n» `{livelink}`")

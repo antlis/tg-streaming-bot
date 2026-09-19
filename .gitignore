@@ -18,3 +18,4 @@ docker-compose.override.yml
 *.bak
 *.bak-*
 *.orig
+resolv.conf
