@@ -2,6 +2,8 @@
 
 Telegram bot that streams **music & video into group voice chats**, built with [Pyrogram](https://docs.pyrogram.org) and [py-tgcalls](https://github.com/pytgcalls/pytgcalls).
 
+![Demo](assets/demo.gif)
+
 ## ✨ Features
 - **Music & video** into group voice chats — from YouTube (search **or** URL), an audio/video file posted in Telegram, or a live link (m3u8 / YouTube-live)
 - **`/search`** — pick from YouTube results (🎵 audio or 🎬 video) instead of auto-playing the first hit
