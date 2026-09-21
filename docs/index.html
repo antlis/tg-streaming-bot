@@ -334,6 +334,22 @@
     margin-top: 1.4rem;
   }
 
+  .hero-demo {
+    margin: 2.5rem auto 0;
+    max-width: 900px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  }
+
+  .hero-demo video {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
   .stack {
     margin-top: 1.5rem;
     font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, monospace;
@@ -637,6 +653,18 @@
       <a class="btn btn-secondary" href="#quickstart">Deploy your own</a>
     </div>
     <div class="stack">Pyrogram · py-tgcalls · ffmpeg · yt-dlp</div>
+    <figure class="hero-demo">
+      <video
+        autoplay
+        loop
+        muted
+        playsinline
+        preload="metadata"
+        poster="https://res.cloudinary.com/dvbyognrh/video/upload/so_0/blog/tg-streaming-bot-demo.jpg"
+        aria-label="Demo of tg-streaming-bot playing media into a Telegram group voice chat">
+        <source src="https://res.cloudinary.com/dvbyognrh/video/upload/f_auto:video,q_auto/blog/tg-streaming-bot-demo.mp4" type="video/mp4" />
+      </video>
+    </figure>
   </section>
 
   <section id="features">
