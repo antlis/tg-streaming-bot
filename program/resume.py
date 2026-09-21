@@ -5,6 +5,7 @@ seconds (RESUME[chat_id]); when a stream drops (network/tunnel hiccup) the queue
 is cleared but RESUME survives, so `/continue` (or the ⏮ button) replays the
 same media seeked to the saved position via ffmpeg `-ss`.
 """
+from pyrogram.types import LinkPreviewOptions
 import os
 import asyncio
 import logging
@@ -88,7 +89,7 @@ async def _auto_recover(chat_id, info, attempts):
         await bot.send_message(
             chat_id,
             f"🔄 **connection dropped — auto-resuming** [{info['name']}]({info['link']}) from `{_fmt(info['pos'])}`{suffix}",
-            disable_web_page_preview=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
             reply_markup=control_panel,
             message_thread_id=get_active_thread(chat_id),
         )
@@ -227,7 +228,7 @@ async def info_cmd(c: Client, m):
     lines.append(" · ".join(meta))
     if len(q) > 1:
         lines.append(f"📖 {len(q) - 1} more in queue — `/playlist`")
-    await m.reply_text("\n".join(lines), reply_markup=control_panel, disable_web_page_preview=True)
+    await m.reply_text("\n".join(lines), reply_markup=control_panel, link_preview_options=LinkPreviewOptions(is_disabled=True))
 
 
 @Client.on_message(command(["seek", f"seek@{BOT_USERNAME}"]) & other_filters)
@@ -250,7 +251,7 @@ async def seek_cmd(c: Client, m):
         RESUME[chat_id] = info
         await m.reply_text(
             f"⏩ **Seeked to** `{_fmt(secs)}` — [{head[0]}]({head[2]})",
-            disable_web_page_preview=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
             reply_markup=control_panel,
         )
     except Exception as e:
@@ -269,7 +270,7 @@ async def continue_cmd(c: Client, m):
         return await m.reply_text("⚠️ the cached file expired — please replay the link normally.")
     await m.reply_text(
         f"⏮ **Resuming** [{info['name']}]({info['link']}) from `{_fmt(info['pos'])}`",
-        disable_web_page_preview=True,
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
         reply_markup=control_panel,
     )
 

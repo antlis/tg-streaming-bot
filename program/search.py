@@ -1,3 +1,4 @@
+from pyrogram.types import LinkPreviewOptions
 import asyncio
 
 from config import BOT_USERNAME
@@ -81,14 +82,14 @@ async def _play_choice(c, query, video):
             return await query.edit_message_text(f"🚫 queue is full (max {MAX_QUEUE_SIZE}).")
         return await query.edit_message_text(
             f"💡 **Queued #{pos}:** [{title[:50]}]({url}) · `{typ}`",
-            reply_markup=control_panel, disable_web_page_preview=True,
+            reply_markup=control_panel, link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     try:
         await call_py.play(chat_id, stream)
         add_to_queue(chat_id, title[:70], path, url, typ, Q)
         await query.edit_message_text(
             f"🎧 **Now playing:** [{title[:50]}]({url}) · `{typ}`",
-            reply_markup=control_panel, disable_web_page_preview=True,
+            reply_markup=control_panel, link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     except Exception as e:
         await query.edit_message_text(f"🚫 error: `{e}`")

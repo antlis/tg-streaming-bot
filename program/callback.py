@@ -1,5 +1,6 @@
 
 
+from pyrogram.types import LinkPreviewOptions
 from driver.decorators import errors_cb
 from driver.queues import QUEUE, RESUME
 from driver.utils import can_manage_vc
@@ -55,7 +56,7 @@ async def cbstart(_, query: CallbackQuery):
 
 🔖 **To know how to use this bot, please click on the » ❓ Basic Guide button!**""",
         reply_markup=InlineKeyboardMarkup(rows),
-        disable_web_page_preview=True,
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
 
 

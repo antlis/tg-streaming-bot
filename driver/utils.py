@@ -1,3 +1,4 @@
+from pyrogram.types import LinkPreviewOptions
 import os
 import re
 import asyncio
@@ -531,7 +532,7 @@ async def stream_end_handler(_, update):
         await bot.send_message(chat_id, "❌ an error occurred\n\n» **Clearing** __Queues__ and leaving video chat.",
                                 message_thread_id=thread_id)
     else:
-        await bot.send_message(chat_id, f"💡 **Streaming next track**\n\n🏷 **Name:** [{op[0]}]({op[1]}) | `{op[2]}`\n💭 **Chat:** `{chat_id}`", disable_web_page_preview=True, reply_markup=keyboard, message_thread_id=thread_id)
+        await bot.send_message(chat_id, f"💡 **Streaming next track**\n\n🏷 **Name:** [{op[0]}]({op[1]}) | `{op[2]}`\n💭 **Chat:** `{chat_id}`", link_preview_options=LinkPreviewOptions(is_disabled=True), reply_markup=keyboard, message_thread_id=thread_id)
     prune_downloads()
 
 

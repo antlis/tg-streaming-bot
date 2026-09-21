@@ -1,3 +1,4 @@
+from pyrogram.types import LinkPreviewOptions
 from datetime import datetime
 from sys import version_info
 from time import time
@@ -89,7 +90,7 @@ async def start_(client: Client, message: Message):
 🔖 **To know how to use this bot, please click on the » ❓ Basic Guide button!**
 """,
         reply_markup=InlineKeyboardMarkup(rows),
-        disable_web_page_preview=True,
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
 
 
@@ -153,7 +154,7 @@ async def help_cmd(client: Client, message: Message):
         "• `/userbotjoin` `/userbotleave` · `/reload`\n"
         "• `/topic lock|unlock|status` — restrict the bot to one forum topic (admins)\n"
         "• `/ping` `/alive` `/uptime`",
-        disable_web_page_preview=True,
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
 
 

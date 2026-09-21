@@ -1,3 +1,4 @@
+from pyrogram.types import LinkPreviewOptions
 import asyncio
 import re
 import time
@@ -204,7 +205,7 @@ async def iptv_cmd(c: Client, m: Message):
             "Direct M3U playlist link is there too if you want to import it "
             "into VLC or any IPTV player.",
             reply_markup=_help_kb(),
-            disable_web_page_preview=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         return
 
@@ -216,7 +217,7 @@ async def iptv_cmd(c: Client, m: Message):
         return await status.edit(
             "❌ **Could not load the channel list — try again later.**\n"
             f"You can also browse manually: [iptv-org/iptv]({_REPO_URL})",
-            disable_web_page_preview=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
 
     results = _search(channels, query)
@@ -224,7 +225,7 @@ async def iptv_cmd(c: Client, m: Message):
         return await status.edit(
             f"❌ **No channels found for** `{query}`\n\n"
             f"Browse the full list: [channels by country]({_COUNTRY_PLAYLISTS_URL})",
-            disable_web_page_preview=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
 
     _RESULTS[chat_id] = results
