@@ -15,7 +15,7 @@ from driver.decorators import errors
 from driver.filters import command, other_filters
 from driver.queues import QUEUE, add_to_queue, drop_if_live, set_active_thread
 from driver.clients import call_py, user
-from driver.utils import bash, make_progress, control_panel, media_audio, drop_stale_queue
+from driver.utils import get_assistant_member, bash, make_progress, control_panel, media_audio, drop_stale_queue
 from pyrogram import Client
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
@@ -208,7 +208,7 @@ async def play(c: Client, m: Message):
         return
     try:
         ubot = (await user.get_me()).id
-        b = await c.get_chat_member(chat_id, ubot)
+        b = await get_assistant_member(c, chat_id, ubot)
         if b.status == ChatMemberStatus.BANNED:
             await m.reply_text(
                 f"@{ASSISTANT_NAME} **is banned in group** {m.chat.title}\n\n» **unban the userbot first if you want to use this bot.**"

@@ -1,5 +1,6 @@
 import asyncio
 from driver.clients import user
+from driver.utils import ensure_assistant_in_chat
 from pyrogram.types import Message
 from pyrogram import Client, filters
 from config import BOT_USERNAME, SUDO_USERS
@@ -17,18 +18,10 @@ from driver.decorators import authorized_users_only, sudo_users_only, errors
 async def join_chat(c: Client, m: Message):
     chat_id = m.chat.id
     ubot_id = (await user.get_me()).id
-    # make the assistant join (ignore if it's already a member)
-    try:
-        invite_link = await m.chat.export_invite_link()
-        if "+" in invite_link:
-            link_hash = (invite_link.replace("+", "")).split("t.me/")[1]
-            await user.join_chat(f"https://t.me/joinchat/{link_hash}")
-        else:
-            await user.join_chat(invite_link)
-    except UserAlreadyParticipant:
-        pass
-    except Exception as e:
-        return await m.reply(f"❌ **userbot failed to join**\n\n**reason**: `{e}`")
+    # make the assistant join (no-op if it's already a member)
+    ok, reason = await ensure_assistant_in_chat(c, chat_id, m.chat.username)
+    if not ok:
+        return await m.reply(f"❌ **userbot failed to join**\n\n**reason**: `{reason}`")
     # optional: promote it (needed only for /volume). The bot may not be able to
     # resolve the assistant peer yet (PeerIdInvalid) — that's fine, skip quietly.
     try:

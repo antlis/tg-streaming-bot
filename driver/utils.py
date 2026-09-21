@@ -9,7 +9,7 @@ from driver.clients import bot, call_py, user
 from driver.queues import QUEUE, clear_queue, get_queue, pop_an_item, is_loop, is_autoplay, add_to_queue, get_active_thread
 from pytgcalls import filters as call_filters
 from pytgcalls.types import MediaStream, AudioQuality, VideoQuality, ChatUpdate, StreamEnded
-from pyrogram.enums import ChatMemberStatus
+from pyrogram.enums import ChatMemberStatus, ChatMembersFilter
 from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
 from pyrogram.types import (
     CallbackQuery,
@@ -197,13 +197,29 @@ def can_manage_vc(member) -> bool:
     return False
 
 
+async def get_assistant_member(c, chat_id, ubot_id):
+    """get_chat_member() for the assistant, tolerant of a cold peer cache.
+
+    A fresh bot session (new token, wiped downloads/bot.session) has never seen
+    the assistant, so the lookup raises PeerIdInvalid even when the assistant is
+    already in the chat -- which callers misread as "not a member" and then try
+    (and fail) to join via an invite link. Listing the admins makes the bot
+    resolve them; if the assistant still isn't found, PeerIdInvalid propagates."""
+    try:
+        return await c.get_chat_member(chat_id, ubot_id)
+    except PeerIdInvalid:
+        async for _ in c.get_chat_members(chat_id, filter=ChatMembersFilter.ADMINISTRATORS):
+            pass
+        return await c.get_chat_member(chat_id, ubot_id)
+
+
 async def ensure_assistant_in_chat(c, chat_id, chat_username=None):
     """Make sure the assistant userbot is a member of the chat (auto-join via
     public username or an exported invite link). Returns (True, None) on success
     or (False, reason)."""
     try:
         ubot = (await user.get_me()).id
-        b = await c.get_chat_member(chat_id, ubot)
+        b = await get_assistant_member(c, chat_id, ubot)
         if b.status == ChatMemberStatus.BANNED:
             return False, f"@{ASSISTANT_NAME} is banned in this group — unban the assistant first."
         return True, None
