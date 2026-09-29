@@ -8,9 +8,6 @@ services:
     - downloads:/app/downloads
     - ${LIBRARY_HOST_DIR:-/tmp}:/library:ro
     - ${COOKIES_HOST_PATH:-/dev/null}:/cookies/cookies.txt
-    dns:
-    - 8.8.8.8
-    - 1.1.1.1
     restart: unless-stopped
     healthcheck:
       test:
