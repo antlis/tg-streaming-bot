@@ -6,6 +6,7 @@ Telegram bot that streams **music & video into group voice chats**, built with [
 - **Music & video** into group voice chats — from YouTube (search **or** URL), an audio/video file posted in Telegram, or a live link (m3u8 / YouTube-live)
 - **`/search`** — pick from YouTube results (🎵 audio or 🎬 video) instead of auto-playing the first hit
 - **Internet radio** — dozens of built-in stations, with the live now-playing track shown on the video card
+- **Extra stream resolvers** — drop-in site plugins plus an optional headless-Chromium fallback for pages yt-dlp can't read (shared with tg-media-bot / tg-mpv-bot)
 - **Live TV (IPTV)** — search 50 000+ channels from the [iptv-org](https://github.com/iptv-org/iptv) public catalogue by name and stream them live; channel logo shown when playing
 - **Local media library** — browse & play your own folders, with audio-track and subtitle selection
 - **Recording** — capture the radio/audio to a voice message or the video to an H.264 mp4 and upload it (toggle on/off, live tracklist)
@@ -71,6 +72,8 @@ Two Telegram identities are required:
 | `MAX_QUEUE_SIZE` | — | max upcoming tracks per chat (default 50; 0 = unlimited) |
 | `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW` | — | per-user command rate limit (default 5 commands / 10s; sudo users exempt) |
 | `SPONSORBLOCK_REMOVE` | — | comma-separated SponsorBlock categories to cut from YouTube downloads (e.g. `sponsor,selfpromo,music_offtopic`); empty = off |
+| `PLUGIN_DIR` / `ENABLE_PLUGINS` | — | directory of custom extractor plugins (`.py` with `match()` + `resolve()`, see `examples/plugin_example.py`) for sites yt-dlp can't handle; they run before yt-dlp. Docker mounts `./plugins` at `/plugins` (default `ENABLE_PLUGINS=true`) |
+| `ENABLE_BROWSER_FALLBACK` / `BROWSER_FALLBACK_TIMEOUT` | — | when yt-dlp can't extract a non-YouTube page, sniff the stream in headless Chromium and play that (defaults `true` / `45`s). Docker: build with `INSTALL_BROWSER=true` (~450 MB) — without it the fallback no-ops |
 | `COMMAND_PREFIXES` | — | accepted command prefixes (default `/ ! .`) |
 | `ASSISTANT_NAME` | — | assistant @username (without @), used in messages |
 | `OWNER_NAME` / `ALIVE_NAME` | — | owner link & name for `/start` and `/alive`; empty = hidden |
@@ -103,6 +106,7 @@ Two Telegram identities are required:
 
 ## Notes
 - YouTube playback **downloads first, then streams** (yt-dlp with the `android_vr` client; H.264+AAC mp4) — direct stream URLs are blocked by YouTube these days. Expect a short delay before playback starts.
+- **Sites yt-dlp can't read** fall through to extractor plugins (run first) and an optional headless-Chromium fallback that captures the player's media request; the referer/headers they need are passed to ffmpeg. Both are opt-in: drop plugins in `./plugins`, build with `INSTALL_BROWSER=true`.
 - **Non-YouTube URLs** (Rutube, Vimeo, IPTV m3u8, etc.) are extracted and streamed live — no download wait, but HLS tokens expire after ~30 minutes so very long sessions may need a seek/restart.
 - Large Telegram files also download fully before streaming — a progress bar is shown; big files just take a while.
 - **`/radio` and `/iptv` never hold a queue slot** — they're live broadcasts, so starting anything else (`/play`, `/vplay`, `/vstream`, `/library`, `/lplay`, `/search`) while one is active interrupts it immediately instead of queuing behind it.

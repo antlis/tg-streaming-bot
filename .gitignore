@@ -19,3 +19,7 @@ docker-compose.override.yml
 *.bak-*
 *.orig
 resolv.conf
+
+# Custom extractor plugins (user-supplied; may be site-specific — keep private)
+/plugins/*
+!/plugins/.gitkeep

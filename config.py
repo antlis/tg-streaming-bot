@@ -85,3 +85,18 @@ COOKIES_FILE = getenv("COOKIES_FILE", "").strip()
 # yt-dlp proxy — proxy URL for non-YouTube downloads (e.g. socks5://user:pass@host:1080).
 # Empty = direct connection.
 PROXY_URL = getenv("PROXY_URL", "").strip()
+
+# ---- extra stream resolvers (opt-in) ----
+# Directory of custom extractor plugins: .py files exposing match(url) and
+# resolve(url) that turn a page URL into a media URL ffmpeg can stream — for
+# sites yt-dlp can't handle. They run before yt-dlp. In Docker the mounted
+# ./plugins dir is used (PLUGIN_DIR=/plugins). See examples/plugin_example.py.
+PLUGIN_DIR = getenv("PLUGIN_DIR", "").strip()
+ENABLE_PLUGINS = getenv("ENABLE_PLUGINS", "true").strip().lower() in ("1", "true", "yes")
+
+# Headless-Chromium fallback: when yt-dlp can't extract a non-YouTube page
+# (its player builds the stream URL in JavaScript), load the page in headless
+# Chromium, capture the media request and stream that. Needs Playwright's
+# Chromium in the image — build with INSTALL_BROWSER=true. No-ops without it.
+ENABLE_BROWSER_FALLBACK = getenv("ENABLE_BROWSER_FALLBACK", "true").strip().lower() in ("1", "true", "yes")
+BROWSER_FALLBACK_TIMEOUT = int(getenv("BROWSER_FALLBACK_TIMEOUT", "45") or "45")

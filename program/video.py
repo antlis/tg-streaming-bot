@@ -7,15 +7,23 @@ from time import time
 
 import logging
 
-from config import ASSISTANT_NAME, BOT_USERNAME, COOKIES_FILE, IMG_1, IMG_2, MAX_QUEUE_SIZE, PROXY_URL, SPONSORBLOCK_REMOVE
+from config import (
+    ASSISTANT_NAME, BOT_USERNAME, BROWSER_FALLBACK_TIMEOUT, COOKIES_FILE, ENABLE_BROWSER_FALLBACK,
+    ENABLE_PLUGINS, IMG_1, IMG_2, MAX_QUEUE_SIZE, PLUGIN_DIR, PROXY_URL, SPONSORBLOCK_REMOVE,
+)
 from driver.design.thumbnail import thumb
 from driver.design.chatname import CHAT_TITLE
+from driver.browser import resolve_media_url
 from driver.decorators import errors
 from driver.filters import command, other_filters
+from driver.plugins import load_plugins, resolve_with_plugins
 from driver.queues import QUEUE, add_to_queue, drop_if_live, set_active_thread
 from driver.clients import call_py, user
 from driver.transcode import prepare_for_stream
-from driver.utils import get_assistant_member, make_progress, control_panel, media_video, drop_stale_queue
+from driver.utils import (
+    get_assistant_member, make_progress, control_panel, media_video, drop_stale_queue,
+    remember_stream_headers,
+)
 from pyrogram import Client
 from pyrogram.enums import ChatMemberStatus
 from pyrogram.errors import UserAlreadyParticipant, UserNotParticipant, PeerIdInvalid
@@ -78,46 +86,92 @@ def ytsearch(query: str):
 _YT_RE = re.compile(r"https?://(www\.|m\.)?(youtube\.com|youtu\.be)/")
 
 
+async def _extract_site(link):
+    """yt-dlp extraction for a non-YouTube page → ``(1, stream_url)`` or
+    ``(0, error)``. Streams the master manifest directly via ffmpeg."""
+    proc = await asyncio.create_subprocess_exec(
+        "yt-dlp", "--no-warnings", "--no-playlist",
+        *_ytdl_site_flags(),
+        "--dump-json",
+        "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
+        link,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        err = stderr.decode(errors="ignore")[-400:]
+        return 0, (err or "metadata extraction failed")
+    try:
+        info = json.loads(stdout.decode(errors="ignore"))
+    except Exception:
+        return 0, "invalid yt-dlp JSON"
+    # preferred_formats[0].manifest_url is the master m3u8 URL
+    mf = info.get("requested_formats") or []
+    manifest = None
+    for f in mf:
+        manifest = f.get("manifest_url") or manifest
+    if not manifest:
+        # fallback: individual format url (muxed stream, e.g. Rutube)
+        for f in mf:
+            u = f.get("url")
+            if u:
+                return 1, u
+        # sites with no requested_formats at all (single already-muxed
+        # stream, e.g. Rutube) put the playable URL at the top level
+        u = info.get("url")
+        if u:
+            return 1, u
+        return 0, "no stream URL found"
+    return 1, manifest
+
+
+async def _set_status(status_msg, text):
+    if status_msg is None:
+        return
+    try:
+        await status_msg.edit_text(text)
+    except Exception:
+        pass  # message gone / unchanged — never block playback on cosmetics
+
+
+async def _resolve_site(link, status_msg=None):
+    """Non-YouTube link → ``(1, stream_url)`` or ``(0, error)``.
+
+    Order: extractor plugins (PLUGIN_DIR) → yt-dlp → headless-Chromium
+    fallback (ENABLE_BROWSER_FALLBACK, needs INSTALL_BROWSER=true in the
+    image). The referer/headers a resolver needs are remembered for the
+    stream so ffmpeg sends them (see driver.utils.remember_stream_headers).
+    """
+    if ENABLE_PLUGINS and PLUGIN_DIR:
+        found = await resolve_with_plugins(link, load_plugins(PLUGIN_DIR))
+        if found:
+            headers = dict(found.headers or {})
+            if found.referer:
+                headers.setdefault("Referer", found.referer)
+            remember_stream_headers(found.media_url, headers)
+            return 1, found.media_url
+
+    ok, result = await _extract_site(link)
+    if ok or not ENABLE_BROWSER_FALLBACK:
+        return ok, result
+
+    log.info("yt-dlp could not extract %s — trying headless browser", link)
+    await _set_status(status_msg, "🌐 No extractor matched — sniffing the page in a headless browser…")
+    sniffed = await resolve_media_url(link, BROWSER_FALLBACK_TIMEOUT)
+    if not sniffed:
+        return 0, result  # keep yt-dlp's original error
+    media_url, referer = sniffed
+    remember_stream_headers(media_url, {"Referer": referer} if referer else {})
+    return 1, media_url
+
+
 async def ytdl(link, status_msg=None):
     # Non-YouTube sites: extract the master m3u8 manifest URL and stream it
     # directly via ffmpeg (no download needed).  The master manifest contains
     # both video and audio variant playlists — ffmpeg selects the best match.
     # YouTube URLs 403 ffmpeg directly, so they must be downloaded first.
     if not _YT_RE.match(link):
-        proc = await asyncio.create_subprocess_exec(
-            "yt-dlp", "--no-warnings", "--no-playlist",
-            *_ytdl_site_flags(),
-            "--dump-json",
-            "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
-            link,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            err = stderr.decode(errors="ignore")[-400:]
-            return 0, (err or "metadata extraction failed")
-        try:
-            info = json.loads(stdout.decode(errors="ignore"))
-        except Exception:
-            return 0, "invalid yt-dlp JSON"
-        # preferred_formats[0].manifest_url is the master m3u8 URL
-        mf = info.get("requested_formats") or []
-        manifest = None
-        for f in mf:
-            manifest = f.get("manifest_url") or manifest
-        if not manifest:
-            # fallback: individual format url (muxed stream, e.g. Rutube)
-            for f in mf:
-                u = f.get("url")
-                if u:
-                    return 1, u
-            # sites with no requested_formats at all (single already-muxed
-            # stream, e.g. Rutube) put the playable URL at the top level
-            u = info.get("url")
-            if u:
-                return 1, u
-            return 0, "no stream URL found"
-        return 1, manifest
+        return await _resolve_site(link, status_msg)
 
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
