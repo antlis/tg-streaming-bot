@@ -1,7 +1,10 @@
+import logging
 import os
 import aiofiles
 import aiohttp
 from PIL import Image, ImageDraw, ImageFont
+
+log = logging.getLogger(__name__)
 
 
 def changeImageSize(maxWidth, maxHeight, image):
@@ -13,18 +16,35 @@ def changeImageSize(maxWidth, maxHeight, image):
     return newImage
 
 
+async def _fetch_thumbnail(thumbnail, userid):
+    """Download *thumbnail* to search/thumb<userid>.png. Returns True on success,
+    False when there is no usable thumbnail (empty URL — e.g. pages only a plugin
+    or the browser fallback can resolve, so yt-dlp had no metadata — or a failed
+    fetch). Never raises: a missing thumbnail must not block playback."""
+    if not thumbnail:
+        return False
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(thumbnail, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                if resp.status != 200:
+                    log.warning("thumbnail fetch failed: HTTP %s", resp.status)
+                    return False
+                f = await aiofiles.open(f"search/thumb{userid}.png", mode="wb")
+                await f.write(await resp.read())
+                await f.close()
+        return True
+    except Exception as exc:
+        log.warning("thumbnail fetch failed: %s: %s", type(exc).__name__, exc)
+        return False
+
+
 async def thumb(thumbnail, title, userid, ctitle):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(thumbnail, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-            if resp.status != 200:
-                # Otherwise we'd silently fall through to Image.open() below on
-                # a file that's either missing (first search for this userid)
-                # or a stale leftover from a previous, unrelated search.
-                raise RuntimeError(f"thumbnail fetch failed: HTTP {resp.status}")
-            f = await aiofiles.open(f"search/thumb{userid}.png", mode="wb")
-            await f.write(await resp.read())
-            await f.close()
-    image1 = Image.open(f"search/thumb{userid}.png")
+    # Fall back to the bundled background when there's no thumbnail to use
+    # (never read a stale thumb file left by an earlier, unrelated search).
+    if await _fetch_thumbnail(thumbnail, userid):
+        image1 = Image.open(f"search/thumb{userid}.png")
+    else:
+        image1 = Image.open("driver/source/LightBlue.png")
     image2 = Image.open("driver/source/LightBlue.png")
     image3 = changeImageSize(1280, 720, image1)
     image4 = changeImageSize(1280, 720, image2)
@@ -49,6 +69,7 @@ async def thumb(thumbnail, title, userid, ctitle):
     )
     img.save(f"search/final{userid}.png")
     os.remove(f"search/temp{userid}.png")
-    os.remove(f"search/thumb{userid}.png")
+    if os.path.exists(f"search/thumb{userid}.png"):
+        os.remove(f"search/thumb{userid}.png")
     final = f"search/final{userid}.png"
     return final
