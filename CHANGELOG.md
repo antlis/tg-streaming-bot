@@ -4,6 +4,12 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+### Added
+- **Extractor plugins** (`PLUGIN_DIR`, `ENABLE_PLUGINS`): drop `.py` files exposing `match()` + `resolve()` into a directory and they resolve non-YouTube pages yt-dlp can't handle, before yt-dlp runs. Same contract as tg-media-bot / tg-mpv-bot; see `examples/plugin_example.py`. Docker mounts `./plugins` at `/plugins`. The referer/headers a plugin returns are passed to ffmpeg via `MediaStream(headers=…)`; a `file://` media playlist gets ffmpeg's protocol whitelist widened.
+- **Headless-Chromium fallback** (`ENABLE_BROWSER_FALLBACK`, `BROWSER_FALLBACK_TIMEOUT`): when yt-dlp can't extract a non-YouTube page, the page is opened in headless Chromium (Playwright), the player's media request is captured and streamed. Opt-in in the Docker image via the `INSTALL_BROWSER=true` build arg (~450 MB); no-ops without it.
+- New dependencies: `playwright`, `curl_cffi`, `pycryptodomex` (the latter two are what extractor plugins typically need).
+
 ## [1.9.0] — 2026-08-22
 ### Added
 - **"▶️ Play all" in `/library`.** Any folder listing with video files directly inside it now shows a "▶️ Play all (N)" button that queues every file in that folder, in sorted order, as one playlist — plays the first immediately if idle, or appends the whole batch if something's already playing.

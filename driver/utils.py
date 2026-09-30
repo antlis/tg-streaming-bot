@@ -24,9 +24,42 @@ log = logging.getLogger(__name__)
 _VQ = {720: VideoQuality.HD_720p, 480: VideoQuality.SD_480p, 360: VideoQuality.SD_360p}
 
 
+# HTTP headers (Referer/Origin/…) a resolver — an extractor plugin or the
+# headless-browser fallback — says a stream URL needs. Keyed by media URL so the
+# many media_* call sites don't change: ffmpeg gets them via MediaStream(headers=).
+_STREAM_HEADERS = {}
+
+
+def remember_stream_headers(url, headers):
+    if headers:
+        _STREAM_HEADERS[str(url)] = dict(headers)
+
+
+def _stream_kwargs(path):
+    """MediaStream kwargs for a resolver-provided URL (empty for everything else)."""
+    return {"headers": _STREAM_HEADERS[str(path)]} if str(path) in _STREAM_HEADERS else {}
+
+
+# Plugins may hand back a local ``file://`` media playlist that lists remote
+# segments — ffmpeg refuses that unless the protocol whitelist is widened.
+_LOCAL_PLAYLIST_PARAMS = "-protocol_whitelist file,http,https,tcp,tls,crypto"
+
+
+def _input_params(path):
+    return _LOCAL_PLAYLIST_PARAMS if str(path).startswith("file://") else None
+
+
+def _join_params(*parts):
+    joined = " ".join(p for p in parts if p)
+    return joined or None
+
+
 def media_audio(path):
     """Audio-only MediaStream (ignore the video track)."""
-    return MediaStream(path, video_flags=MediaStream.Flags.IGNORE)
+    return MediaStream(
+        path, video_flags=MediaStream.Flags.IGNORE,
+        ffmpeg_parameters=_input_params(path), **_stream_kwargs(path),
+    )
 
 
 def media_video(path, quality=720):
@@ -35,6 +68,8 @@ def media_video(path, quality=720):
         path,
         audio_parameters=AudioQuality.HIGH,
         video_parameters=_VQ.get(quality, VideoQuality.HD_720p),
+        ffmpeg_parameters=_input_params(path),
+        **_stream_kwargs(path),
     )
 
 
@@ -47,7 +82,11 @@ def _gain_params(vol, pos=0):
 
 
 def media_audio_gain(path, vol, pos=0):
-    return MediaStream(path, video_flags=MediaStream.Flags.IGNORE, ffmpeg_parameters=_gain_params(vol, pos))
+    return MediaStream(
+        path, video_flags=MediaStream.Flags.IGNORE,
+        ffmpeg_parameters=_join_params(_input_params(path), _gain_params(vol, pos)),
+        **_stream_kwargs(path),
+    )
 
 
 def media_video_gain(path, quality, vol, pos=0):
@@ -55,7 +94,8 @@ def media_video_gain(path, quality, vol, pos=0):
         path,
         audio_parameters=AudioQuality.HIGH,
         video_parameters=_VQ.get(quality, VideoQuality.HD_720p),
-        ffmpeg_parameters=_gain_params(vol, pos),
+        ffmpeg_parameters=_join_params(_input_params(path), _gain_params(vol, pos)),
+        **_stream_kwargs(path),
     )
 
 
