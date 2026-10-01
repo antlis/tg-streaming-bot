@@ -16,3 +16,10 @@ jobs:
         run: |
           pip install --quiet flake8
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - run: nix flake check
