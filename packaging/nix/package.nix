@@ -4,6 +4,7 @@
   python3,
   callPackage,
   makeWrapper,
+  coreutils,
   yt-dlp,
   ffmpeg,
   git,
@@ -38,7 +39,10 @@ let
     ]
     ++ lib.optional withBrowser ps.playwright
   );
+  # coreutils: the bot shells out to `rm` etc., and a systemd user manager's
+  # PATH can lack /usr/bin entirely.
   runtimePath = lib.makeBinPath [
+    coreutils
     yt-dlp
     ffmpeg
     git
@@ -64,8 +68,8 @@ stdenv.mkDerivation {
   dontBuild = true;
 
   # The bot keeps everything relative to its working directory: downloads/
-  # (sessions, resume state, cache), search/ (thumbnails), and reads
-  # driver/source/ (background + fonts). The code lives in the read-only store,
+  # (sessions, resume state, cache), search/ (thumbnails), reads driver/source/
+  # (background + fonts) and has Pyrogram scan program/ for handlers. The code lives in the read-only store,
   # so the launcher cd's into a writable state dir and links the assets in.
   installPhase = ''
     runHook preInstall
@@ -76,8 +80,10 @@ stdenv.mkDerivation {
     cat > $out/bin/tg-streaming-bot <<EOF2
     #!${stdenv.shell}
     state="\''${TG_STREAMING_BOT_HOME:-\''${XDG_STATE_HOME:-\$HOME/.local/state}/tg-streaming-bot}"
-    mkdir -p "\$state/downloads" "\$state/search" "\$state/driver"
-    ln -sfn $share/driver/source "\$state/driver/source"
+    ${coreutils}/bin/mkdir -p "\$state/downloads" "\$state/search" "\$state/driver"
+    ${coreutils}/bin/ln -sfn $share/driver/source "\$state/driver/source"
+    # Pyrogram discovers handlers by scanning ./program relative to the cwd
+    ${coreutils}/bin/ln -sfn $share/program "\$state/program"
     cd "\$state"
     exec ${pythonEnv.interpreter} $share/main.py "\$@"
     EOF2
