@@ -16,6 +16,10 @@
       packages = forAll (pkgs: rec {
         tg-streaming-bot = pkgs.callPackage ./packaging/nix/package.nix { };
         with-browser = tg-streaming-bot.override { withBrowser = true; };
+        full = tg-streaming-bot.override {
+          withBrowser = true;
+          withVaapi = true;
+        };
         default = tg-streaming-bot;
       });
 
