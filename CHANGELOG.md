@@ -4,6 +4,10 @@ All notable changes to **tg-streaming-bot** are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/), and the project aims to
 follow [Semantic Versioning](https://semver.org/).
 
+## [1.11.0] — 2026-10-01
+### Added
+- **Nix flake.** `nix run github:antlis/tg-streaming-bot`; `.#with-browser` adds the headless-Chromium fallback; `nix develop` for a dev shell. Builds `kurigram`, `tgcrypto`, `py-tgcalls` and the native `ntgcalls` from PyPI wheels (none are in nixpkgs), wraps `yt-dlp`/`ffmpeg`/`git` onto `PATH`, and runs the bot from a writable state dir (`~/.local/state/tg-streaming-bot`) because it keeps `downloads/` and `search/` relative to the working directory. A home-manager module (`services.tg-streaming-bot`) runs it as a user service; optional VA-API via `withVaapi`. CI runs `nix flake check` (byte-compile, lint, import every module).
+
 ## [1.10.0] — 2026-10-01
 ### Added
 - **Extractor plugins** (`PLUGIN_DIR`, `ENABLE_PLUGINS`): drop `.py` files exposing `match()` + `resolve()` into a directory and they resolve non-YouTube pages yt-dlp can't handle, before yt-dlp runs. Same contract as tg-media-bot / tg-mpv-bot; see `examples/plugin_example.py`. Docker mounts `./plugins` at `/plugins`. The referer/headers a plugin returns are passed to ffmpeg via `MediaStream(headers=…)`; a `file://` media playlist gets ffmpeg's protocol whitelist widened.

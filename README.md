@@ -55,6 +55,29 @@ Two Telegram identities are required:
    ```
 5. In the group: add the bot (as admin), start a voice chat, then `/play <song>`.
 
+### Nix
+
+```bash
+nix run github:antlis/tg-streaming-bot     # env vars (see Configuration) from the environment
+nix build .#with-browser                   # + headless-Chromium fallback (large)
+nix develop                                # dev shell with all Python deps
+```
+
+The flake builds the dependencies nixpkgs lacks (`kurigram`, `tgcrypto`,
+`py-tgcalls`, and the native `ntgcalls` library) from their PyPI wheels, and puts
+`yt-dlp`/`ffmpeg`/`git` on the bot's `PATH`. The bot keeps everything relative to
+its working directory, so the launcher runs it from a writable state dir —
+`~/.local/state/tg-streaming-bot` (or `$TG_STREAMING_BOT_HOME`) — holding
+`downloads/` (the bot session, resume state, cache). VA-API transcoding on Intel:
+`.override { withVaapi = true; }` plus `TRANSCODE_HWACCEL=vaapi`.
+
+For home-manager, import `homeManagerModules.default` and enable
+`services.tg-streaming-bot` (`environmentFile` holds the secrets, `settings` takes
+the other env vars). `nix flake check` runs the CI checks and imports every
+module against the Nix-built deps. The Reality VPN sidecar below is
+Docker-only — on Nix, point `PROXY_URL` at whatever proxy you run.
+**Run either the Docker bot or the Nix one, never both** — they share the token.
+
 ## Configuration (`.env`)
 | Key | Required | Purpose |
 |---|---|---|
